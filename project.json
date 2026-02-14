@@ -1,0 +1,731 @@
+{
+  "projectId": "430db95b-d7ab-42ed-859d-16990c9cbe09",
+  "commands": [
+    {
+      "command": "/_internal_reset_inflight",
+      "description": "Handler for /_internal_reset_inflight",
+      "example": "User: /_internal_reset_inflight → bot replies."
+    },
+    {
+      "command": "/help",
+      "description": "Instruksi ringkas dan contoh input/output.",
+      "usage": "/help",
+      "examples": [
+        "User: /help → Bot: Kirim teks bahasa Inggris... Contoh..."
+      ],
+      "example": "User: /help → Bot: Kirim teks bahasa Inggris... Contoh...",
+      "notes": "Menjelaskan juga /reset."
+    },
+    {
+      "command": "/reset",
+      "description": "Menghapus memori percakapan user untuk chat ini.",
+      "usage": "/reset",
+      "examples": [
+        "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus."
+      ],
+      "example": "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus.",
+      "notes": "Jika MONGODB_URI tidak ada, reset hanya menghapus memori in-memory."
+    },
+    {
+      "command": "/start",
+      "description": "Perkenalan singkat, cara pakai (kirim teks Inggris, bot balas Indonesia), dan info /reset.",
+      "usage": "/start",
+      "examples": [
+        "User: /start → Bot: Halo. Aku bot penerjemah otomatis..."
+      ],
+      "example": "User: /start → Bot: Halo. Aku bot penerjemah otomatis...",
+      "notes": "Setelah /start, cukup kirim teks bahasa Inggris tanpa perintah."
+    }
+  ],
+  "aiMessages": [
+    {
+      "role": "user",
+      "content": "buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram"
+    },
+    {
+      "role": "assistant",
+      "content": "Proyek bot Telegram baru sudah dibuat: grammY + @grammyjs/runner long polling, /start /help /reset, handler teks catch-all yang tidak menelan slash commands, balasan untuk pesan non-teks, AI terjemahan via CookMyBots gateway dengan logging, serta long-term memory di MongoDB (fallback Map jika MONGODB_URI kosong). Startup sudah termasuk deleteWebhook drop pending updates, process-level error handlers, bot.catch, dan retry backoff khusus untuk 409 Conflict.\n\nFiles touched (16): .env.sample, DOCS.md, README.md, package.json, project.json, src/bot.js…\nValidation: ✅ project passes syntax/basic checks after this edit."
+    }
+  ],
+  "createdBy": "698c5da5448c6e227437206a",
+  "source": "ai-cold-start",
+  "description": "",
+  "platform": "telegram",
+  "planMarkdown": "Bot: Bot Telegram Penerjemah Otomatis Inggris ke Indonesia (Production-Ready, Node.js ESM + grammY)\n\nSummary:\nBot ini menerjemahkan teks bahasa Inggris ke bahasa Indonesia secara otomatis di Telegram. Pengguna dapat mengirim pesan teks, meneruskan (forward) pesan, atau membalas (reply) pesan, lalu bot membalas dengan hasil terjemahan. Bot juga menyediakan mode auto-translate per chat, opsi gaya terjemahan (formal/santai), serta fitur dasar operasional seperti rate limiting, logging, dan pelacakan error.\n\nRencana ini mencakup arsitektur single-service Node.js berbasis grammY, pemilihan penyimpanan (MongoDB untuk konfigurasi dan audit), integrasi dengan layanan penerjemahan eksternal melalui HTTP, serta praktik produksi seperti webhook/long polling, manajemen environment variables, observability sederhana, dan strategi keamanan. Setup API Telegram (token, pengaturan bot di BotFather) diasumsikan sudah ada; sisanya dijelaskan end-to-end.\n\nProduct goals:\nTujuan utama\n1) Menerjemahkan teks bahasa Inggris ke bahasa Indonesia dengan cepat dan akurat untuk kebutuhan chat sehari-hari.\n2) Mendukung beberapa cara penggunaan: perintah manual, reply-to-translate, dan mode otomatis per chat.\n3) Memberikan pengalaman yang aman dan tahan gangguan (graceful degradation) saat layanan terjemahan bermasalah.\n\nTujuan produk tambahan\n1) Personalisasi sederhana: mode formal/santai, pilihan apakah mempertahankan format baris, dan preferensi untuk menampilkan teks asli.\n2) Admin controls: pembatasan penggunaan (allowlist/denylist), pemantauan jumlah request, dan kemampuan mematikan fitur tertentu jika terjadi penyalahgunaan.\n3) Kepatuhan operasional: menyimpan jejak minimal (audit ringan) untuk debugging dan metrik tanpa menyimpan konten sensitif berlebihan.\n\nBatasan yang jelas\n1) Fokus bahasa sumber Inggris dan target Indonesia; deteksi bahasa opsional hanya untuk menghindari menerjemahkan teks non-Inggris.\n2) Tidak menangani terjemahan dokumen besar, audio, atau OCR pada tahap awal. Jika nanti ditambah, dilakukan bertahap dengan pipeline terpisah dan pembatasan ukuran.\n\nHigh-level architecture:\nGambaran tinggi\n1) Satu layanan Node.js menjalankan bot grammY.\n2) Lapisan Bot Router: menangani perintah, message handlers, callback queries (jika ada), dan middleware (auth/rate limit).\n3) Lapisan Domain: modul translation service (adapter ke penyedia penerjemahan), modul preferences, modul admin policy.\n4) Lapisan Persistence: MongoDB untuk menyimpan konfigurasi pengguna/chat, pengaturan mode, dan event ringkas (telemetry/audit). In-memory maps dipakai untuk cache jangka pendek dan rate limiting.\n5) Lapisan Observability: structured logging, pelaporan error, dan metrik sederhana berbasis agregasi di MongoDB atau log.\n\nMode update Telegram\n1) Disarankan webhook untuk produksi agar latensi rendah dan efisien; fallback ke long polling untuk environment yang tidak mendukung webhook.\n2) Endpoint webhook harus memverifikasi bahwa request berasal dari Telegram melalui secret path atau header secret token (sesuai kemampuan platform) dan selalu membatasi ukuran payload.\n\nStruktur middleware\n1) Context enrichment: normalisasi userId/chatId, deteksi tipe chat (private/group/supergroup), dan pembacaan konfigurasi dari DB dengan cache.\n2) Rate limiting: per user dan per chat (lebih ketat untuk group), menggunakan in-memory token bucket dengan TTL; untuk multi-instance tidak relevan karena layanan tunggal.\n3) Access control: admin-only commands, allowlist untuk penggunaan di group (opsional), dan blocklist untuk user bermasalah.\n4) Safety checks: menolak input terlalu panjang, menghapus kontrol karakter, dan sanitasi minimal untuk menjaga format.\n\nTranslation adapter\n1) Modul penerjemahan melakukan HTTP request ke API penerjemahan eksternal.\n2) Mendukung retry terbatas dengan backoff untuk error sementara, serta circuit breaker ringan (misalnya menonaktifkan sementara jika banyak error berturut-turut).\n3) Normalisasi hasil: trimming, menjaga line breaks sesuai opsi pengguna, dan menyertakan indikator sumber/target bahasa.\n\nKetahanan dan performa\n1) Cache hasil terjemahan jangka pendek (misalnya 5–30 menit) berdasarkan hash input + opsi, untuk mengurangi biaya dan latensi.\n2) Batas panjang input default (misalnya 2.000–4.000 karakter), dengan pesan error yang jelas jika melebihi.\n3) Antrean internal sederhana berbasis in-memory untuk membatasi concurrency ke API penerjemahan, mencegah overload saat spam.\n\nData model:\nKoleksi MongoDB yang disarankan\n1) users\n   1) id: userId (number/string)\n   2) createdAt, lastSeenAt\n   3) preferences:\n      1) tone: formal | casual\n      2) showOriginal: boolean\n      3) preserveFormatting: boolean\n      4) autoTranslatePrivate: boolean\n   4) status:\n      1) isBlocked: boolean\n      2) isAdmin: boolean (opsional; atau pakai env ADMINUSERIDS)\n   5) stats (agregat ringan): totalRequests, lastRequestAt\n\n2) chats\n   1) id: chatId\n   2) type: private | group | supergroup\n   3) title (opsional untuk audit)\n   4) settings:\n      1) autoTranslate: boolean\n      2) requireEnglishOnly: boolean\n      3) allowInGroup: boolean\n      4) rateLimitProfile: default | strict\n   5) moderation:\n      1) blockedUserIds: array (opsional kecil)\n\n3) translationaudit (opsional, minim data)\n   Tujuan: debugging dan metrik, bukan menyimpan konten sensitif.\n   1) id\n   2) timestamp\n   3) userId, chatId\n   4) inputMeta: length, hash (bukan teks mentah)\n   5) options: tone, preserveFormatting\n   6) resultMeta: length, providerLatencyMs, status: ok|fail, errorCode\n\n4) adminconfig (opsional)\n   1) key-value sederhana untuk toggle global\n   2) maintenanceMode: boolean\n   3) defaultRateLimits\n\nData yang sengaja tidak disimpan\n1) Teks asli dan hasil terjemahan tidak perlu disimpan permanen kecuali pengguna mengaktifkan mode logging eksplisit untuk debugging.\n2) Identitas sensitif di luar Telegram (email/telepon) tidak dikumpulkan.\n\nCache in-memory\n1) translationCache: key = hash(text + options), value = translatedText, expiresAt.\n2) rateLimitBuckets: key = userId atau chatId, value = token bucket state.\n3) configCache: key = userId/chatId, value = preferences/settings dengan TTL pendek (misalnya 30–120 detik).\n\nKey flows:\nFlow 1: /start dan onboarding\n1) User mengirim /start.\n2) Bot menyimpan/menyegarkan profil user (createdAt/lastSeenAt).\n3) Bot mengirim ringkasan cara pakai: kirim teks Inggris, atau reply pesan untuk diterjemahkan, serta cara mengaktifkan mode otomatis.\n\nFlow 2: Terjemahan manual via perintah\n1) User mengirim /translate <teks>.\n2) Bot validasi panjang, rate limit, dan baca preferensi user.\n3) Bot panggil translation adapter.\n4) Bot membalas dengan hasil terjemahan, opsional menyertakan teks asli sesuai preferensi.\n\nFlow 3: Reply-to-translate (paling natural)\n1) User me-reply sebuah pesan berbahasa Inggris dengan /translate atau /tr.\n2) Bot mengambil teks dari pesan yang di-reply.\n3) Bot terjemahkan dan membalas di thread reply yang sama.\n4) Jika pesan yang di-reply bukan teks (stiker/foto), bot memberi instruksi bahwa hanya teks didukung saat ini.\n\nFlow 4: Mode auto-translate per chat\n1) Admin group atau user private mengaktifkan /auto on.\n2) Bot menyimpan chats.settings.autoTranslate = true.\n3) Setiap pesan teks baru di chat:\n   1) Bot cek apakah pesan adalah command; jika ya, lewati.\n   2) Bot cek heuristik bahasa (opsional): jika terlihat bukan Inggris dan requireEnglishOnly aktif, lewati.\n   3) Bot rate limit dan terjemahkan.\n   4) Bot membalas (atau mengirim pesan baru) dengan terjemahan.\n4) /auto off mematikan.\n\nFlow 5: Pengaturan gaya terjemahan\n1) User set /tone formal atau /tone casual.\n2) Bot simpan di users.preferences.tone.\n3) Opsi ini diteruskan ke translation adapter (misalnya sebagai instruksi gaya atau prompt jika provider mendukung).\n\nFlow 6: Error handling dan graceful degradation\n1) Jika provider timeout atau error:\n   1) Bot mengirim pesan singkat: layanan terjemahan sedang bermasalah, coba lagi.\n   2) Bot mencatat audit status fail + errorCode.\n2) Jika input terlalu panjang:\n   1) Bot meminta user memecah teks.\n3) Jika rate limit terlampaui:\n   1) Bot mengembalikan pesan tunggu beberapa detik.\n\nFlow 7: Admin dan operasional\n1) /stats (admin) menampilkan ringkasan request hari ini, error rate, dan top chats (tanpa konten).\n2) /maintenance on mematikan fitur terjemahan untuk semua kecuali admin.\n3) /block <userId> (opsional) menambahkan user ke blocklist.\n\nFlow 8: Privasi\n1) /privacy menampilkan kebijakan singkat: apa yang disimpan (metadata, bukan konten) dan opsi opt-out audit (jika disediakan).\n2) /deleteme menghapus data user dari koleksi users dan preferensi terkait (best-effort) serta menghentikan auto-translate private.\n\nTech stack:\nRuntime dan framework\n1) Node.js (ESM) sebagai single service.\n2) grammY sebagai framework bot Telegram.\n\nKonfigurasi dan secrets\n1) TELEGRAMBOTTOKEN wajib dari environment variables.\n2) MONGODBURI dari environment variables (jika memakai MongoDB).\n3) TRANSLATIONAPIKEY dan TRANSLATIONAPIBASEURL dari environment variables untuk provider penerjemahan eksternal.\n4) ADMINUSERIDS (daftar userId admin) dari environment variables.\n\nPersistensi\n1) MongoDB (sudah terintegrasi) untuk:\n   1) preferensi user\n   2) settings chat\n   3) audit dan metrik ringan (opsional)\n2) In-memory maps untuk:\n   1) cache terjemahan jangka pendek\n   2) rate limiting\n   3) cache konfigurasi TTL pendek\n\nIntegrasi terjemahan\n1) HTTP client untuk memanggil layanan penerjemahan eksternal.\n2) Strategi reliability: timeout ketat, retry terbatas, dan pembatas concurrency.\n\nPenyimpanan file (opsional)\n1) Jika suatu saat mendukung terjemahan dari file teks, simpan sementara di simple filesystem storage atau object storage, dengan TTL dan pembersihan terjadwal.\n\nDeployment\n1) Dijalankan pada Node.js server di cloud sebagai satu proses layanan.\n2) Mendukung webhook (disarankan) atau long polling.\n3) Logging keluar ke stdout/stderr untuk dikumpulkan oleh platform hosting.\n\nCatatan pembatasan\n1) Tidak menambahkan database atau infrastruktur lain di luar MongoDB atau in-memory.\n2) Tidak memakai message queue eksternal; kontrol beban dilakukan internal dalam proses.\n\nNon-functional requirements:\nKeamanan\n1) Validasi input: batasi panjang teks, tolak payload aneh, dan pastikan hanya memproses message types yang didukung.\n2) Proteksi webhook: gunakan secret path atau secret token, dan batasi request size.\n3) Minimal data: simpan metadata seperlunya, hindari menyimpan isi pesan kecuali benar-benar dibutuhkan.\n4) Admin-only operations: semua perintah admin harus diverifikasi dengan ADMINUSERIDS.\n\nKeandalan\n1) Timeout ketat ke provider terjemahan dan fallback pesan yang ramah.\n2) Retry hanya untuk error transient dan dibatasi agar tidak memperparah beban.\n3) Circuit breaker ringan: jika error beruntun, hentikan sementara pemanggilan provider dan informasikan user.\n\nSkalabilitas (dalam batas single service)\n1) Rate limiting per user/chat untuk menahan spam.\n2) Concurrency limiter untuk panggilan terjemahan.\n3) Cache hasil terjemahan TTL untuk mengurangi biaya.\n\nObservability\n1) Structured logging untuk event penting: command dipakai, request translate, error provider, rate limited.\n2) Audit tanpa konten: simpan hash dan panjang input saja.\n3) Admin /stats untuk melihat kondisi bot tanpa akses ke data sensitif.\n\nKualitas dan maintainability\n1) Pemisahan modul: handlers, services, repositories (Mongo), dan middleware.\n2) Konfigurasi berbasis environment variables, dengan validasi saat startup.\n3) Pengujian: minimal unit test untuk parser input, rate limit, dan adapter normalisasi hasil.\n\nKepatuhan operasional\n1) Retensi audit pendek (misalnya 7–30 hari) dengan job pembersihan periodik.\n2) Kemampuan hapus data user via /deleteme.\n3) Pesan /privacy menjelaskan dengan jelas apa yang disimpan dan tujuan penyimpanannya.\n\nBot commands:\n• /start — Memulai bot dan melihat cara penggunaan. (usage: /start) [general]\n• /help — Menampilkan bantuan singkat dan daftar fitur. (usage: /help) [general]\n• /translate — Menerjemahkan teks Inggris ke Indonesia secara manual, atau gunakan dengan reply ke pesan. (usage: 1) /translate This is a test\n2) Reply sebuah pesan lalu kirim /translate) [translation]\n• /tr — Alias singkat untuk /translate. (usage: 1) /tr Please translate this\n2) Reply pesan lalu /tr) [translation]\n• /auto — Mengaktifkan atau mematikan mode terjemahan otomatis untuk chat saat ini. (usage: 1) /auto on\n2) /auto off\n3) /auto status) [translation]\n• /tone — Mengatur gaya terjemahan (formal atau santai). (usage: 1) /tone formal\n2) /tone casual\n3) /tone status) [settings]\n• /original — Menampilkan atau menyembunyikan teks asli pada hasil terjemahan. (usage: 1) /original on\n2) /original off\n3) /original status) [settings]\n• /format — Mengatur apakah format baris (line breaks) dipertahankan. (usage: 1) /format preserve\n2) /format compact\n3) /format status) [settings]\n• /privacy — Menjelaskan kebijakan privasi dan data yang disimpan bot. (usage: /privacy) [general]\n• /deleteme — Menghapus data preferensi pengguna dari database (best-effort). (usage: /deleteme) [general]\n• /stats — Ringkasan metrik penggunaan dan error (khusus admin). (usage: /stats) [admin]\n• /maintenance — Mengaktifkan/mematikan mode perawatan global (khusus admin). (usage: 1) /maintenance on\n2) /maintenance off\n3) /maintenance status) [admin]\n• /block — Memblokir user tertentu dari menggunakan bot (khusus admin, opsional). (usage: /block <userId>) [admin]\n• /unblock — Membuka blokir user tertentu (khusus admin, opsional). (usage: /unblock <userId>) [admin]\n",
+  "planSections": {
+    "productGoals": "Tujuan utama\n1) Menerjemahkan teks bahasa Inggris ke bahasa Indonesia dengan cepat dan akurat untuk kebutuhan chat sehari-hari.\n2) Mendukung beberapa cara penggunaan: perintah manual, reply-to-translate, dan mode otomatis per chat.\n3) Memberikan pengalaman yang aman dan tahan gangguan (graceful degradation) saat layanan terjemahan bermasalah.\n\nTujuan produk tambahan\n1) Personalisasi sederhana: mode formal/santai, pilihan apakah mempertahankan format baris, dan preferensi untuk menampilkan teks asli.\n2) Admin controls: pembatasan penggunaan (allowlist/denylist), pemantauan jumlah request, dan kemampuan mematikan fitur tertentu jika terjadi penyalahgunaan.\n3) Kepatuhan operasional: menyimpan jejak minimal (audit ringan) untuk debugging dan metrik tanpa menyimpan konten sensitif berlebihan.\n\nBatasan yang jelas\n1) Fokus bahasa sumber Inggris dan target Indonesia; deteksi bahasa opsional hanya untuk menghindari menerjemahkan teks non-Inggris.\n2) Tidak menangani terjemahan dokumen besar, audio, atau OCR pada tahap awal. Jika nanti ditambah, dilakukan bertahap dengan pipeline terpisah dan pembatasan ukuran.",
+    "highLevelArchitecture": "Gambaran tinggi\n1) Satu layanan Node.js menjalankan bot grammY.\n2) Lapisan Bot Router: menangani perintah, message handlers, callback queries (jika ada), dan middleware (auth/rate limit).\n3) Lapisan Domain: modul translation service (adapter ke penyedia penerjemahan), modul preferences, modul admin policy.\n4) Lapisan Persistence: MongoDB untuk menyimpan konfigurasi pengguna/chat, pengaturan mode, dan event ringkas (telemetry/audit). In-memory maps dipakai untuk cache jangka pendek dan rate limiting.\n5) Lapisan Observability: structured logging, pelaporan error, dan metrik sederhana berbasis agregasi di MongoDB atau log.\n\nMode update Telegram\n1) Disarankan webhook untuk produksi agar latensi rendah dan efisien; fallback ke long polling untuk environment yang tidak mendukung webhook.\n2) Endpoint webhook harus memverifikasi bahwa request berasal dari Telegram melalui secret path atau header secret token (sesuai kemampuan platform) dan selalu membatasi ukuran payload.\n\nStruktur middleware\n1) Context enrichment: normalisasi userId/chatId, deteksi tipe chat (private/group/supergroup), dan pembacaan konfigurasi dari DB dengan cache.\n2) Rate limiting: per user dan per chat (lebih ketat untuk group), menggunakan in-memory token bucket dengan TTL; untuk multi-instance tidak relevan karena layanan tunggal.\n3) Access control: admin-only commands, allowlist untuk penggunaan di group (opsional), dan blocklist untuk user bermasalah.\n4) Safety checks: menolak input terlalu panjang, menghapus kontrol karakter, dan sanitasi minimal untuk menjaga format.\n\nTranslation adapter\n1) Modul penerjemahan melakukan HTTP request ke API penerjemahan eksternal.\n2) Mendukung retry terbatas dengan backoff untuk error sementara, serta circuit breaker ringan (misalnya menonaktifkan sementara jika banyak error berturut-turut).\n3) Normalisasi hasil: trimming, menjaga line breaks sesuai opsi pengguna, dan menyertakan indikator sumber/target bahasa.\n\nKetahanan dan performa\n1) Cache hasil terjemahan jangka pendek (misalnya 5–30 menit) berdasarkan hash input + opsi, untuk mengurangi biaya dan latensi.\n2) Batas panjang input default (misalnya 2.000–4.000 karakter), dengan pesan error yang jelas jika melebihi.\n3) Antrean internal sederhana berbasis in-memory untuk membatasi concurrency ke API penerjemahan, mencegah overload saat spam.",
+    "dataModel": "Koleksi MongoDB yang disarankan\n1) users\n   1) id: userId (number/string)\n   2) createdAt, lastSeenAt\n   3) preferences:\n      1) tone: formal | casual\n      2) showOriginal: boolean\n      3) preserveFormatting: boolean\n      4) autoTranslatePrivate: boolean\n   4) status:\n      1) isBlocked: boolean\n      2) isAdmin: boolean (opsional; atau pakai env ADMINUSERIDS)\n   5) stats (agregat ringan): totalRequests, lastRequestAt\n\n2) chats\n   1) id: chatId\n   2) type: private | group | supergroup\n   3) title (opsional untuk audit)\n   4) settings:\n      1) autoTranslate: boolean\n      2) requireEnglishOnly: boolean\n      3) allowInGroup: boolean\n      4) rateLimitProfile: default | strict\n   5) moderation:\n      1) blockedUserIds: array (opsional kecil)\n\n3) translationaudit (opsional, minim data)\n   Tujuan: debugging dan metrik, bukan menyimpan konten sensitif.\n   1) id\n   2) timestamp\n   3) userId, chatId\n   4) inputMeta: length, hash (bukan teks mentah)\n   5) options: tone, preserveFormatting\n   6) resultMeta: length, providerLatencyMs, status: ok|fail, errorCode\n\n4) adminconfig (opsional)\n   1) key-value sederhana untuk toggle global\n   2) maintenanceMode: boolean\n   3) defaultRateLimits\n\nData yang sengaja tidak disimpan\n1) Teks asli dan hasil terjemahan tidak perlu disimpan permanen kecuali pengguna mengaktifkan mode logging eksplisit untuk debugging.\n2) Identitas sensitif di luar Telegram (email/telepon) tidak dikumpulkan.\n\nCache in-memory\n1) translationCache: key = hash(text + options), value = translatedText, expiresAt.\n2) rateLimitBuckets: key = userId atau chatId, value = token bucket state.\n3) configCache: key = userId/chatId, value = preferences/settings dengan TTL pendek (misalnya 30–120 detik).",
+    "keyFlows": "Flow 1: /start dan onboarding\n1) User mengirim /start.\n2) Bot menyimpan/menyegarkan profil user (createdAt/lastSeenAt).\n3) Bot mengirim ringkasan cara pakai: kirim teks Inggris, atau reply pesan untuk diterjemahkan, serta cara mengaktifkan mode otomatis.\n\nFlow 2: Terjemahan manual via perintah\n1) User mengirim /translate <teks>.\n2) Bot validasi panjang, rate limit, dan baca preferensi user.\n3) Bot panggil translation adapter.\n4) Bot membalas dengan hasil terjemahan, opsional menyertakan teks asli sesuai preferensi.\n\nFlow 3: Reply-to-translate (paling natural)\n1) User me-reply sebuah pesan berbahasa Inggris dengan /translate atau /tr.\n2) Bot mengambil teks dari pesan yang di-reply.\n3) Bot terjemahkan dan membalas di thread reply yang sama.\n4) Jika pesan yang di-reply bukan teks (stiker/foto), bot memberi instruksi bahwa hanya teks didukung saat ini.\n\nFlow 4: Mode auto-translate per chat\n1) Admin group atau user private mengaktifkan /auto on.\n2) Bot menyimpan chats.settings.autoTranslate = true.\n3) Setiap pesan teks baru di chat:\n   1) Bot cek apakah pesan adalah command; jika ya, lewati.\n   2) Bot cek heuristik bahasa (opsional): jika terlihat bukan Inggris dan requireEnglishOnly aktif, lewati.\n   3) Bot rate limit dan terjemahkan.\n   4) Bot membalas (atau mengirim pesan baru) dengan terjemahan.\n4) /auto off mematikan.\n\nFlow 5: Pengaturan gaya terjemahan\n1) User set /tone formal atau /tone casual.\n2) Bot simpan di users.preferences.tone.\n3) Opsi ini diteruskan ke translation adapter (misalnya sebagai instruksi gaya atau prompt jika provider mendukung).\n\nFlow 6: Error handling dan graceful degradation\n1) Jika provider timeout atau error:\n   1) Bot mengirim pesan singkat: layanan terjemahan sedang bermasalah, coba lagi.\n   2) Bot mencatat audit status fail + errorCode.\n2) Jika input terlalu panjang:\n   1) Bot meminta user memecah teks.\n3) Jika rate limit terlampaui:\n   1) Bot mengembalikan pesan tunggu beberapa detik.\n\nFlow 7: Admin dan operasional\n1) /stats (admin) menampilkan ringkasan request hari ini, error rate, dan top chats (tanpa konten).\n2) /maintenance on mematikan fitur terjemahan untuk semua kecuali admin.\n3) /block <userId> (opsional) menambahkan user ke blocklist.\n\nFlow 8: Privasi\n1) /privacy menampilkan kebijakan singkat: apa yang disimpan (metadata, bukan konten) dan opsi opt-out audit (jika disediakan).\n2) /deleteme menghapus data user dari koleksi users dan preferensi terkait (best-effort) serta menghentikan auto-translate private.",
+    "techStack": "Runtime dan framework\n1) Node.js (ESM) sebagai single service.\n2) grammY sebagai framework bot Telegram.\n\nKonfigurasi dan secrets\n1) TELEGRAMBOTTOKEN wajib dari environment variables.\n2) MONGODBURI dari environment variables (jika memakai MongoDB).\n3) TRANSLATIONAPIKEY dan TRANSLATIONAPIBASEURL dari environment variables untuk provider penerjemahan eksternal.\n4) ADMINUSERIDS (daftar userId admin) dari environment variables.\n\nPersistensi\n1) MongoDB (sudah terintegrasi) untuk:\n   1) preferensi user\n   2) settings chat\n   3) audit dan metrik ringan (opsional)\n2) In-memory maps untuk:\n   1) cache terjemahan jangka pendek\n   2) rate limiting\n   3) cache konfigurasi TTL pendek\n\nIntegrasi terjemahan\n1) HTTP client untuk memanggil layanan penerjemahan eksternal.\n2) Strategi reliability: timeout ketat, retry terbatas, dan pembatas concurrency.\n\nPenyimpanan file (opsional)\n1) Jika suatu saat mendukung terjemahan dari file teks, simpan sementara di simple filesystem storage atau object storage, dengan TTL dan pembersihan terjadwal.\n\nDeployment\n1) Dijalankan pada Node.js server di cloud sebagai satu proses layanan.\n2) Mendukung webhook (disarankan) atau long polling.\n3) Logging keluar ke stdout/stderr untuk dikumpulkan oleh platform hosting.\n\nCatatan pembatasan\n1) Tidak menambahkan database atau infrastruktur lain di luar MongoDB atau in-memory.\n2) Tidak memakai message queue eksternal; kontrol beban dilakukan internal dalam proses.",
+    "nonFunctional": "Keamanan\n1) Validasi input: batasi panjang teks, tolak payload aneh, dan pastikan hanya memproses message types yang didukung.\n2) Proteksi webhook: gunakan secret path atau secret token, dan batasi request size.\n3) Minimal data: simpan metadata seperlunya, hindari menyimpan isi pesan kecuali benar-benar dibutuhkan.\n4) Admin-only operations: semua perintah admin harus diverifikasi dengan ADMINUSERIDS.\n\nKeandalan\n1) Timeout ketat ke provider terjemahan dan fallback pesan yang ramah.\n2) Retry hanya untuk error transient dan dibatasi agar tidak memperparah beban.\n3) Circuit breaker ringan: jika error beruntun, hentikan sementara pemanggilan provider dan informasikan user.\n\nSkalabilitas (dalam batas single service)\n1) Rate limiting per user/chat untuk menahan spam.\n2) Concurrency limiter untuk panggilan terjemahan.\n3) Cache hasil terjemahan TTL untuk mengurangi biaya.\n\nObservability\n1) Structured logging untuk event penting: command dipakai, request translate, error provider, rate limited.\n2) Audit tanpa konten: simpan hash dan panjang input saja.\n3) Admin /stats untuk melihat kondisi bot tanpa akses ke data sensitif.\n\nKualitas dan maintainability\n1) Pemisahan modul: handlers, services, repositories (Mongo), dan middleware.\n2) Konfigurasi berbasis environment variables, dengan validasi saat startup.\n3) Pengujian: minimal unit test untuk parser input, rate limit, dan adapter normalisasi hasil.\n\nKepatuhan operasional\n1) Retensi audit pendek (misalnya 7–30 hari) dengan job pembersihan periodik.\n2) Kemampuan hapus data user via /deleteme.\n3) Pesan /privacy menjelaskan dengan jelas apa yang disimpan dan tujuan penyimpanannya."
+  },
+  "runStatuses": {
+    "430db95b-d7ab-42ed-859d-16990c9cbe09:mlmflgpn:4bw4t0": {
+      "phase": "done",
+      "stage": "cold_start",
+      "runId": "430db95b-d7ab-42ed-859d-16990c9cbe09:mlmflgpn:4bw4t0",
+      "lastUserMessage": "buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram",
+      "startedAt": "2026-02-14T14:48:10.729Z",
+      "updatedAt": "2026-02-14T14:49:47.414Z",
+      "message": "GitHub auto-push skipped (no repo linked or GitHub not connected in session).",
+      "commands": [
+        {
+          "name": "help",
+          "file": "src/commands/help.js"
+        },
+        {
+          "name": "reset",
+          "file": "src/commands/reset.js"
+        },
+        {
+          "name": "start",
+          "file": "src/commands/start.js"
+        }
+      ],
+      "ok": true,
+      "state": {
+        "projectId": "430db95b-d7ab-42ed-859d-16990c9cbe09",
+        "fileStructure": {
+          ".env.sample": {
+            "type": "file",
+            "content": "TELEGRAM_BOT_TOKEN=\nMONGODB_URI=\nCOOKMYBOTS_AI_ENDPOINT=\nCOOKMYBOTS_AI_KEY=\nAI_TIMEOUT_MS=\nAI_MAX_RETRIES=\nCONCURRENCY=\n"
+          },
+          "CHANGELOG.md": {
+            "type": "file",
+            "content": "# Changelog\n\nAll notable changes to this bot project are recorded here.\n\n## 2026-02-14 14:49:47. UTC\n- Request: buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram\n- Summary: Proyek bot Telegram baru sudah dibuat: grammY + @grammyjs/runner long polling, /start /help /reset, handler teks catch-all yang tidak menelan slash commands, balasan untuk pesan non-teks, AI terjemahan via CookMyBots ga…\n- Files: .env.sample, DOCS.md, README.md, package.json, project.json, src/bot.js, src/commands/help.js, src/commands/loader.js, src/commands/reset.js, src/commands/start.js, src/index.js, src/lib/ai.js, src/lib/config.js, src/lib/db.js (+2 more)\n\n"
+          },
+          "DOCS.md": {
+            "type": "file",
+            "content": "Bot ini menerjemahkan pesan teks dari bahasa Inggris ke Bahasa Indonesia.\n\nCara pakai\nKirim pesan teks bahasa Inggris, bot akan membalas dengan terjemahan Bahasa Indonesia.\n\nPerintah\n1) /start\nPerkenalan singkat dan cara pakai.\n\n2) /help\nInstruksi ringkas dan contoh.\n\n3) /reset\nMenghapus memori percakapan kamu untuk chat ini.\n\nContoh\nUser: I will be late for the meeting.\nBot: Aku akan terlambat untuk rapat.\n\nEnvironment variables\n1) TELEGRAM_BOT_TOKEN\nToken bot Telegram dari BotFather.\n\n2) MONGODB_URI\nKoneksi MongoDB untuk menyimpan memori percakapan. Jika tidak diisi, bot tetap berjalan dengan memori in-memory.\n\n3) COOKMYBOTS_AI_ENDPOINT\nBase URL AI gateway CookMyBots. Bot akan memanggil endpoint ini + /chat.\n\n4) COOKMYBOTS_AI_KEY\nAPI key untuk AI gateway CookMyBots.\n\n5) AI_TIMEOUT_MS\nTimeout request AI (default 600000).\n\n6) AI_MAX_RETRIES\nJumlah retry untuk error sementara (default 2).\n\n7) CONCURRENCY\nConcurrency runner grammY (default 20).\n"
+          },
+          "README.md": {
+            "type": "file",
+            "content": "Bot Telegram penerjemah otomatis bahasa Inggris ke Bahasa Indonesia.\n\nCara pakai cepat\n1) Set TELEGRAM_BOT_TOKEN\n2) Jalankan bot\n3) Kirim teks bahasa Inggris, bot akan membalas terjemahan bahasa Indonesia\n\nFitur\n1) Terjemahan otomatis untuk setiap pesan teks non-perintah\n2) Perintah /start, /help, /reset\n3) Memori jangka panjang (MongoDB) untuk konteks terjemahan; fallback in-memory jika MONGODB_URI tidak diset\n4) Long polling via @grammyjs/runner untuk deployment yang stabil\n5) Proteksi dasar: in-flight guard per chat untuk menghindari banyak request bersamaan\n\nSetup\n1) Install\nnpm install\n\n2) Buat file .env dari .env.sample lalu isi TELEGRAM_BOT_TOKEN\n\n3) Jalankan lokal\nnpm run dev\n\n4) Jalankan production\nnpm start\n\nEnvironment variables\n1) TELEGRAM_BOT_TOKEN (wajib)\n2) MONGODB_URI (opsional, tapi disarankan untuk memory persisten)\n3) COOKMYBOTS_AI_ENDPOINT (wajib untuk AI, biasanya sudah disediakan CookMyBots). Default: https://api.cookmybots.com/api/ai\n4) COOKMYBOTS_AI_KEY (wajib untuk AI, biasanya sudah disediakan CookMyBots)\n5) AI_TIMEOUT_MS (opsional, default 600000)\n6) AI_MAX_RETRIES (opsional, default 2)\n7) CONCURRENCY (opsional, default 20)\n\nPerintah\n1) /start\nMenjelaskan cara pakai.\n\n2) /help\nInstruksi singkat + contoh.\n\n3) /reset\nMenghapus memori percakapan user pada chat tersebut.\n\nDatabase\nKoleksi: memory_messages\nField minimal:\nplatform, userId, chatId, role, text, ts\n\nTroubleshooting\n1) Bot tidak jalan dan minta token\nPastikan TELEGRAM_BOT_TOKEN sudah diset.\n\n2) Bot jalan tapi tidak membalas\nPeriksa log untuk error 409 Conflict atau error Telegram API.\n\n3) Memory tidak persisten\nSet MONGODB_URI. Jika tidak ada, bot akan pakai in-memory dan log warning.\n"
+          },
+          "package.json": {
+            "type": "file",
+            "content": "{\n  \"scripts\": {\n    \"install:root\": \"bash -lc \\\"set -e; if [ -f package-lock.json ]; then npm ci; else npm install; fi\\\"\",\n    \"build\": \"npm run install:root && echo build\",\n    \"start\": \"node src/index.js\",\n    \"dev\": \"node --watch src/index.js\"\n  },\n  \"dependencies\": {\n    \"@grammyjs/runner\": \"^2.0.3\",\n    \"axios\": \"^1.7.9\",\n    \"dotenv\": \"^16.4.5\",\n    \"grammy\": \"^1.20.0\",\n    \"mongodb\": \"^6.10.0\"\n  },\n  \"name\": \"en-id-translator-bot\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"engines\": {\n    \"node\": \">=18\"\n  },\n  \"devDependencies\": {}\n}\n"
+          },
+          "src": {
+            "type": "dir",
+            "children": {
+              "bot.js": {
+                "type": "file",
+                "content": "import { Bot } from \"grammy\";\n\nimport { registerCommands } from \"./commands/loader.js\";\nimport { translateEnglishToIndonesian } from \"./lib/ai.js\";\nimport { addTurn, getRecentTurns, clearMemory } from \"./lib/memory.js\";\nimport { log, safeErr } from \"./lib/logging.js\";\n\nexport function createBot(token) {\n  const bot = new Bot(token);\n\n  bot.catch((err) => {\n    const ctx = err?.ctx;\n    log.error(\"bot error\", {\n      err: safeErr(err?.error || err),\n      chatId: ctx?.chat?.id ? String(ctx.chat.id) : \"\",\n      fromId: ctx?.from?.id ? String(ctx.from.id) : \"\"\n    });\n  });\n\n  registerCommands(bot);\n\n  const inFlightByChat = new Map();\n\n  bot.on(\"message:text\", async (ctx, next) => {\n    const raw = ctx.message?.text || \"\";\n    if (raw.startsWith(\"/\")) return next();\n\n    const chatId = ctx.chat?.id;\n    const userId = ctx.from?.id;\n\n    if (!chatId || !userId) {\n      return ctx.reply(\"Maaf, aku butuh info chat dan user untuk memproses pesan ini.\");\n    }\n\n    const key = String(chatId);\n    if (inFlightByChat.get(key)) {\n      return ctx.reply(\"Sedang menerjemahkan pesan sebelumnya. Coba lagi sebentar ya.\");\n    }\n\n    inFlightByChat.set(key, true);\n\n    try {\n      const text = raw.trim();\n      if (!text) return;\n\n      await addTurn({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId),\n        role: \"user\",\n        text\n      });\n\n      const history = await getRecentTurns({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId),\n        limit: 16\n      });\n\n      const translated = await translateEnglishToIndonesian({\n        userText: text,\n        history\n      });\n\n      await ctx.reply(translated || \"Maaf, aku belum dapat hasil terjemahan.\");\n\n      await addTurn({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId),\n        role: \"assistant\",\n        text: translated || \"\"\n      });\n    } catch (e) {\n      log.error(\"translate handler failed\", { err: safeErr(e) });\n      await ctx.reply(\"Maaf, terjadi kendala saat menerjemahkan. Coba lagi sebentar ya.\");\n    } finally {\n      inFlightByChat.delete(key);\n    }\n  });\n\n  bot.on(\"message\", async (ctx) => {\n    const hasText = !!ctx.message?.text;\n    if (hasText) return;\n    await ctx.reply(\"Aku hanya bisa menerjemahkan pesan teks (bahasa Inggris ke Indonesia). Kirim teks ya.\");\n  });\n\n  bot.command(\"_internal_reset_inflight\", async (ctx) => {\n    const chatId = ctx.chat?.id;\n    if (chatId) inFlightByChat.delete(String(chatId));\n    await ctx.reply(\"OK\");\n  });\n\n  bot.command(\"reset\", async (ctx) => {\n    const chatId = ctx.chat?.id;\n    const userId = ctx.from?.id;\n\n    if (!chatId || !userId) return ctx.reply(\"Maaf, tidak bisa menentukan chat/user.\");\n\n    try {\n      await clearMemory({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId)\n      });\n      await ctx.reply(\"Riwayat percakapan kamu untuk chat ini sudah dihapus.\");\n    } catch (e) {\n      log.error(\"reset failed\", { err: safeErr(e) });\n      await ctx.reply(\"Maaf, gagal menghapus riwayat. Coba lagi sebentar ya.\");\n    }\n  });\n\n  return bot;\n}\n"
+              },
+              "commands": {
+                "type": "dir",
+                "children": {
+                  "help.js": {
+                    "type": "file",
+                    "content": "export default function register(bot) {\n  bot.command(\"help\", async (ctx) => {\n    await ctx.reply(\n      \"Kirim teks bahasa Inggris, aku akan menerjemahkan ke Bahasa Indonesia.\\n\\nContoh:\\nUser: I will be late for the meeting.\\nBot: Aku akan terlambat untuk rapat.\\n\\nPerintah:\\n/start untuk info singkat\\n/help untuk bantuan\\n/reset untuk menghapus riwayat percakapan\"\n    );\n  });\n}\n"
+                  },
+                  "loader.js": {
+                    "type": "file",
+                    "content": "import fs from \"node:fs\";\nimport path from \"node:path\";\nimport { fileURLToPath, pathToFileURL } from \"node:url\";\n\nimport { log } from \"../lib/logging.js\";\n\nexport function registerCommands(bot) {\n  const dir = path.dirname(fileURLToPath(import.meta.url));\n\n  const files = fs\n    .readdirSync(dir)\n    .filter((f) => f.endsWith(\".js\"))\n    .filter((f) => f !== \"loader.js\")\n    .filter((f) => !f.startsWith(\"_\"));\n\n  for (const f of files) {\n    const url = pathToFileURL(path.join(dir, f)).href;\n    import(url)\n      .then((mod) => {\n        const fn = mod?.default || mod?.register;\n        if (typeof fn === \"function\") {\n          fn(bot);\n          log.info(\"command registered\", { file: f });\n        } else {\n          log.warn(\"command skipped (no export)\", { file: f });\n        }\n      })\n      .catch((e) => {\n        log.error(\"command import failed\", { file: f, err: String(e?.message || e) });\n      });\n  }\n}\n"
+                  },
+                  "reset.js": {
+                    "type": "file",
+                    "content": "import { clearMemory } from \"../lib/memory.js\";\nimport { log, safeErr } from \"../lib/logging.js\";\n\nexport default function register(bot) {\n  bot.command(\"reset\", async (ctx) => {\n    const chatId = ctx.chat?.id;\n    const userId = ctx.from?.id;\n\n    if (!chatId || !userId) {\n      return ctx.reply(\"Maaf, tidak bisa menentukan chat/user untuk reset.\");\n    }\n\n    try {\n      await clearMemory({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId)\n      });\n      await ctx.reply(\"Riwayat percakapan kamu untuk chat ini sudah dihapus.\");\n    } catch (e) {\n      log.error(\"/reset failed\", { err: safeErr(e) });\n      await ctx.reply(\"Maaf, gagal menghapus riwayat. Coba lagi sebentar ya.\");\n    }\n  });\n}\n"
+                  },
+                  "start.js": {
+                    "type": "file",
+                    "content": "export default function register(bot) {\n  bot.command(\"start\", async (ctx) => {\n    await ctx.reply(\n      \"Halo. Aku bot penerjemah otomatis dari bahasa Inggris ke Bahasa Indonesia.\\n\\nCara pakai: kirim teks bahasa Inggris, nanti aku balas terjemahannya.\\nKalau ingin hapus riwayat percakapan, pakai /reset.\"\n    );\n  });\n}\n"
+                  }
+                }
+              },
+              "index.js": {
+                "type": "file",
+                "content": "import \"dotenv/config\";\n\nimport { run } from \"@grammyjs/runner\";\n\nimport { cfg } from \"./lib/config.js\";\nimport { log, safeErr } from \"./lib/logging.js\";\nimport { createBot } from \"./bot.js\";\n\nprocess.on(\"unhandledRejection\", (reason) => {\n  log.error(\"process unhandledRejection\", { err: safeErr(reason) });\n  process.exit(1);\n});\n\nprocess.on(\"uncaughtException\", (err) => {\n  log.error(\"process uncaughtException\", { err: safeErr(err) });\n  process.exit(1);\n});\n\nfunction sleep(ms) {\n  return new Promise((r) => setTimeout(r, ms));\n}\n\nasync function deleteWebhookSafe(bot) {\n  try {\n    await bot.api.deleteWebhook({ drop_pending_updates: true });\n    log.info(\"telegram deleteWebhook ok\", { dropPendingUpdates: true });\n  } catch (e) {\n    log.warn(\"telegram deleteWebhook failed\", { err: safeErr(e) });\n  }\n}\n\nasync function startPollingWithConflictBackoff(bot) {\n  const backoffs = [2000, 5000, 10000, 20000];\n  let i = 0;\n\n  while (true) {\n    try {\n      log.info(\"polling start\", { mode: \"long_polling\", concurrency: cfg.CONCURRENCY });\n      const runner = run(bot, { concurrency: cfg.CONCURRENCY });\n      await runner.task();\n      log.warn(\"polling stopped\", { reason: \"runner.task resolved\" });\n      i = 0;\n    } catch (e) {\n      const msg = safeErr(e);\n      const code = e?.error_code || e?.response?.status;\n      const isConflict = code === 409 || String(msg).includes(\"409\");\n\n      if (isConflict) {\n        const waitMs = backoffs[Math.min(i, backoffs.length - 1)];\n        log.warn(\"polling conflict (409) - retrying\", { waitMs, err: msg });\n        await sleep(waitMs);\n        i += 1;\n        continue;\n      }\n\n      log.error(\"polling failed\", { err: msg });\n      throw e;\n    }\n  }\n}\n\nasync function boot() {\n  log.info(\"boot start\", {\n    platform: \"telegram\",\n    polling: true,\n    TELEGRAM_BOT_TOKEN_set: !!cfg.TELEGRAM_BOT_TOKEN,\n    MONGODB_URI_set: !!cfg.MONGODB_URI,\n    COOKMYBOTS_AI_ENDPOINT_set: !!cfg.COOKMYBOTS_AI_ENDPOINT,\n    COOKMYBOTS_AI_KEY_set: !!cfg.COOKMYBOTS_AI_KEY\n  });\n\n  if (!cfg.TELEGRAM_BOT_TOKEN) {\n    console.error(\"TELEGRAM_BOT_TOKEN is required. Set it in environment variables and redeploy.\");\n    process.exit(1);\n  }\n\n  const bot = createBot(cfg.TELEGRAM_BOT_TOKEN);\n\n  try {\n    await bot.init();\n  } catch (e) {\n    log.warn(\"bot.init failed\", { err: safeErr(e) });\n  }\n\n  await deleteWebhookSafe(bot);\n  await startPollingWithConflictBackoff(bot);\n}\n\nboot().catch((e) => {\n  log.error(\"boot failed\", { err: safeErr(e) });\n  process.exit(1);\n});\n"
+              },
+              "lib": {
+                "type": "dir",
+                "children": {
+                  "ai.js": {
+                    "type": "file",
+                    "content": "import axios from \"axios\";\n\nimport { cfg } from \"./config.js\";\nimport { log, safeErr } from \"./logging.js\";\n\nfunction sleep(ms) {\n  return new Promise((r) => setTimeout(r, ms));\n}\n\nfunction buildMessages({ history, userText }) {\n  const system =\n    \"Kamu adalah penerjemah dari bahasa Inggris ke Bahasa Indonesia. \" +\n    \"Tugasmu hanya menerjemahkan. Jaga arti, nada, dan struktur. \" +\n    \"Pertahankan baris baru persis seperti sumber. \" +\n    \"Jangan menambah penjelasan kecuali diminta user. \" +\n    \"Jika ada istilah teknis, pertahankan istilah penting dalam bahasa aslinya bila lebih umum, \" +\n    \"dengan penyesuaian yang natural.\";\n\n  const turns = Array.isArray(history) ? history : [];\n  const filtered = turns\n    .filter((t) => t && (t.role === \"user\" || t.role === \"assistant\"))\n    .map((t) => ({ role: t.role, content: String(t.text || \"\") }));\n\n  return [{ role: \"system\", content: system }, ...filtered, { role: \"user\", content: userText }];\n}\n\nexport async function translateEnglishToIndonesian({ userText, history }) {\n  const endpointBase = String(cfg.COOKMYBOTS_AI_ENDPOINT || \"\").replace(/\\/+$/, \"\");\n  const url = endpointBase ? `${endpointBase}/chat` : \"\";\n\n  if (!url || !cfg.COOKMYBOTS_AI_KEY) {\n    log.error(\"ai config missing\", {\n      COOKMYBOTS_AI_ENDPOINT_set: !!cfg.COOKMYBOTS_AI_ENDPOINT,\n      COOKMYBOTS_AI_KEY_set: !!cfg.COOKMYBOTS_AI_KEY\n    });\n    return \"Maaf, AI penerjemah belum dikonfigurasi. Coba hubungi admin bot.\";\n  }\n\n  const timeoutMs = cfg.AI_TIMEOUT_MS;\n  const maxRetries = cfg.AI_MAX_RETRIES;\n\n  const messages = buildMessages({ history, userText });\n\n  for (let attempt = 0; attempt <= maxRetries; attempt++) {\n    const meta = { feature: \"translate\", attempt };\n    log.info(\"ai call start\", meta);\n\n    try {\n      const res = await axios.post(\n        url,\n        {\n          messages,\n          meta: { platform: \"telegram\", feature: \"translate\" }\n        },\n        {\n          timeout: timeoutMs,\n          headers: {\n            Authorization: `Bearer ${cfg.COOKMYBOTS_AI_KEY}`,\n            \"Content-Type\": \"application/json\"\n          }\n        }\n      );\n\n      const data = res?.data;\n      const out = data?.output;\n      const content = typeof out?.content === \"string\" ? out.content : \"\";\n\n      if (!data?.ok) {\n        log.warn(\"ai call non-ok\", { ...meta, err: String(data?.error || data?.message || \"non-ok\") });\n      }\n\n      if (!content) {\n        log.warn(\"ai call missing content\", { ...meta });\n        return \"Maaf, aku tidak menerima hasil terjemahan dari AI.\";\n      }\n\n      log.info(\"ai call success\", { ...meta });\n      return content.trim();\n    } catch (e) {\n      const errMsg = safeErr(e);\n      log.error(\"ai call failed\", { ...meta, err: errMsg });\n\n      const status = e?.response?.status;\n      const shouldRetry = !status || (status >= 500 && status < 600) || status === 429;\n\n      if (attempt < maxRetries && shouldRetry) {\n        const waitMs = 500 * Math.pow(2, attempt);\n        await sleep(waitMs);\n        continue;\n      }\n\n      return \"Maaf, terjadi kendala saat menerjemahkan. Coba lagi sebentar ya.\";\n    }\n  }\n\n  return \"Maaf, terjadi kendala saat menerjemahkan. Coba lagi sebentar ya.\";\n}\n"
+                  },
+                  "config.js": {
+                    "type": "file",
+                    "content": "export const cfg = {\n  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || \"\",\n  MONGODB_URI: process.env.MONGODB_URI || \"\",\n\n  COOKMYBOTS_AI_ENDPOINT:\n    process.env.COOKMYBOTS_AI_ENDPOINT || \"https://api.cookmybots.com/api/ai\",\n  COOKMYBOTS_AI_KEY: process.env.COOKMYBOTS_AI_KEY || \"\",\n\n  AI_TIMEOUT_MS: Number(process.env.AI_TIMEOUT_MS || 600000),\n  AI_MAX_RETRIES: Number(process.env.AI_MAX_RETRIES || 2),\n  CONCURRENCY: Number(process.env.CONCURRENCY || 20)\n};\n"
+                  },
+                  "db.js": {
+                    "type": "file",
+                    "content": "import { MongoClient } from \"mongodb\";\n\nimport { log, safeErr } from \"./logging.js\";\n\nlet client = null;\nlet db = null;\nlet connecting = null;\n\nexport async function getDb(mongoUri) {\n  if (!mongoUri) return null;\n  if (db) return db;\n  if (connecting) return connecting;\n\n  connecting = (async () => {\n    try {\n      client = new MongoClient(mongoUri, {\n        maxPoolSize: 10,\n        ignoreUndefined: true\n      });\n      await client.connect();\n      db = client.db();\n      log.info(\"mongo connected\", { ok: true });\n      return db;\n    } catch (e) {\n      log.error(\"mongo connect failed\", { err: safeErr(e) });\n      client = null;\n      db = null;\n      return null;\n    } finally {\n      connecting = null;\n    }\n  })();\n\n  return connecting;\n}\n\nexport async function withCollection(mongoUri, name, fn, opName = \"op\") {\n  const d = await getDb(mongoUri);\n  if (!d) return null;\n\n  try {\n    const col = d.collection(name);\n    return await fn(col);\n  } catch (e) {\n    log.error(\"mongo operation failed\", {\n      collection: name,\n      op: opName,\n      err: safeErr(e)\n    });\n    throw e;\n  }\n}\n"
+                  },
+                  "logging.js": {
+                    "type": "file",
+                    "content": "export function safeErr(err) {\n  return (\n    err?.response?.data?.error?.message ||\n    err?.response?.data?.message ||\n    err?.message ||\n    String(err)\n  );\n}\n\nfunction out(level, msg, meta) {\n  const line = {\n    level,\n    msg,\n    ...(meta && typeof meta === \"object\" ? meta : {})\n  };\n  console.log(JSON.stringify(line));\n}\n\nexport const log = {\n  info: (msg, meta) => out(\"info\", msg, meta),\n  warn: (msg, meta) => out(\"warn\", msg, meta),\n  error: (msg, meta) => out(\"error\", msg, meta)\n};\n"
+                  },
+                  "memory.js": {
+                    "type": "file",
+                    "content": "import { cfg } from \"./config.js\";\nimport { withCollection } from \"./db.js\";\nimport { log } from \"./logging.js\";\n\nconst COL = \"memory_messages\";\n\nconst mem = new Map();\nlet warnedNoMongo = false;\n\nfunction memKey({ platform, userId, chatId }) {\n  return `${platform}:${String(userId)}:${String(chatId)}`;\n}\n\nfunction warnNoMongoOnce() {\n  if (warnedNoMongo) return;\n  warnedNoMongo = true;\n  log.warn(\"MONGODB_URI missing - using in-memory memory (not persistent)\", {\n    persistence: false\n  });\n}\n\nexport async function addTurn({ platform, userId, chatId, role, text }) {\n  const doc = {\n    platform,\n    userId: String(userId),\n    chatId: String(chatId),\n    role,\n    text: String(text || \"\").slice(0, 8000),\n    ts: new Date()\n  };\n\n  if (!cfg.MONGODB_URI) {\n    warnNoMongoOnce();\n    const k = memKey(doc);\n    const arr = mem.get(k) || [];\n    arr.push({ role: doc.role, text: doc.text, ts: doc.ts });\n    if (arr.length > 60) arr.splice(0, arr.length - 60);\n    mem.set(k, arr);\n    return;\n  }\n\n  await withCollection(\n    cfg.MONGODB_URI,\n    COL,\n    (col) => col.insertOne(doc),\n    \"insertOne\"\n  );\n}\n\nexport async function getRecentTurns({ platform, userId, chatId, limit = 16 }) {\n  if (!cfg.MONGODB_URI) {\n    warnNoMongoOnce();\n    const k = memKey({ platform, userId, chatId });\n    const arr = mem.get(k) || [];\n    return arr.slice(-limit).map((x) => ({ role: x.role, text: x.text }));\n  }\n\n  const q = {\n    platform,\n    userId: String(userId),\n    chatId: String(chatId)\n  };\n\n  const rows = await withCollection(\n    cfg.MONGODB_URI,\n    COL,\n    (col) => col.find(q).sort({ ts: -1 }).limit(limit).toArray(),\n    \"findRecent\"\n  );\n\n  const list = Array.isArray(rows) ? rows : [];\n  return list.reverse().map((r) => ({ role: r.role, text: r.text }));\n}\n\nexport async function clearMemory({ platform, userId, chatId }) {\n  if (!cfg.MONGODB_URI) {\n    warnNoMongoOnce();\n    mem.delete(memKey({ platform, userId, chatId }));\n    return;\n  }\n\n  const q = {\n    platform,\n    userId: String(userId),\n    chatId: String(chatId)\n  };\n\n  await withCollection(\n    cfg.MONGODB_URI,\n    COL,\n    (col) => col.deleteMany(q),\n    \"deleteMany\"\n  );\n}\n"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "commands": [
+          {
+            "command": "/_internal_reset_inflight",
+            "description": "Handler for /_internal_reset_inflight",
+            "example": "User: /_internal_reset_inflight → bot replies."
+          },
+          {
+            "command": "/help",
+            "description": "Instruksi ringkas dan contoh input/output.",
+            "usage": "/help",
+            "examples": [
+              "User: /help → Bot: Kirim teks bahasa Inggris... Contoh..."
+            ],
+            "example": "User: /help → Bot: Kirim teks bahasa Inggris... Contoh...",
+            "notes": "Menjelaskan juga /reset."
+          },
+          {
+            "command": "/reset",
+            "description": "Menghapus memori percakapan user untuk chat ini.",
+            "usage": "/reset",
+            "examples": [
+              "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus."
+            ],
+            "example": "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus.",
+            "notes": "Jika MONGODB_URI tidak ada, reset hanya menghapus memori in-memory."
+          },
+          {
+            "command": "/start",
+            "description": "Perkenalan singkat, cara pakai (kirim teks Inggris, bot balas Indonesia), dan info /reset.",
+            "usage": "/start",
+            "examples": [
+              "User: /start → Bot: Halo. Aku bot penerjemah otomatis..."
+            ],
+            "example": "User: /start → Bot: Halo. Aku bot penerjemah otomatis...",
+            "notes": "Setelah /start, cukup kirim teks bahasa Inggris tanpa perintah."
+          }
+        ],
+        "envVarDocs": [
+          {
+            "key": "TELEGRAM_BOT_TOKEN",
+            "title": "Telegram Bot Token",
+            "description": "Token bot dari BotFather untuk mengakses Telegram Bot API.",
+            "usage": "Dipakai saat boot untuk membuat instance bot dan start long polling.",
+            "howToGet": "Buat bot lewat BotFather, lalu salin tokennya.",
+            "example": "123456789:ABCdefGhIJKlmnoPQRstuVWxyZ",
+            "isSecret": true,
+            "required": true
+          },
+          {
+            "key": "MONGODB_URI",
+            "title": "MongoDB Connection String",
+            "description": "Koneksi MongoDB untuk menyimpan long-term memory percakapan di koleksi memory_messages.",
+            "usage": "Jika diset, bot akan insertOne/find/deleteMany untuk memori. Jika kosong, bot pakai Map (non-persistent).",
+            "howToGet": "Buat database MongoDB (Atlas atau managed Mongo), lalu copy connection string database.",
+            "example": "mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/dbname?retryWrites=true&w=majority",
+            "isSecret": true,
+            "required": false
+          },
+          {
+            "key": "COOKMYBOTS_AI_ENDPOINT",
+            "title": "CookMyBots AI Endpoint",
+            "description": "Base URL AI gateway CookMyBots. Bot akan memanggil endpoint ini dengan /chat untuk terjemahan.",
+            "usage": "Digunakan oleh src/lib/ai.js untuk POST {endpoint}/chat.",
+            "howToGet": "Disediakan oleh CookMyBots. Jika tidak diset, default memakai https://api.cookmybots.com/api/ai.",
+            "example": "https://api.cookmybots.com/api/ai",
+            "isSecret": false,
+            "required": false
+          },
+          {
+            "key": "COOKMYBOTS_AI_KEY",
+            "title": "CookMyBots AI Key",
+            "description": "Key untuk autentikasi ke AI gateway CookMyBots.",
+            "usage": "Dikirim sebagai header Authorization: Bearer COOKMYBOTS_AI_KEY di setiap panggilan AI.",
+            "howToGet": "Disediakan oleh CookMyBots.",
+            "example": "cmb_ai_xxxxxxxxxxxxxxxxx",
+            "isSecret": true,
+            "required": false
+          },
+          {
+            "key": "AI_TIMEOUT_MS",
+            "title": "AI Timeout (ms)",
+            "description": "Timeout untuk request ke AI gateway.",
+            "usage": "axios timeout untuk src/lib/ai.js.",
+            "howToGet": "",
+            "example": "600000",
+            "isSecret": false,
+            "required": false
+          },
+          {
+            "key": "AI_MAX_RETRIES",
+            "title": "AI Max Retries",
+            "description": "Jumlah retry untuk error sementara (5xx/429/network).",
+            "usage": "Loop retry di src/lib/ai.js.",
+            "howToGet": "",
+            "example": "2",
+            "isSecret": false,
+            "required": false
+          },
+          {
+            "key": "CONCURRENCY",
+            "title": "Runner Concurrency",
+            "description": "Concurrency untuk @grammyjs/runner supaya update Telegram bisa diproses paralel tanpa blocking.",
+            "usage": "run(bot, { concurrency }).",
+            "howToGet": "",
+            "example": "20",
+            "isSecret": false,
+            "required": false
+          }
+        ],
+        "commandDocs": [
+          {
+            "command": "/start",
+            "description": "Perkenalan singkat, cara pakai (kirim teks Inggris, bot balas Indonesia), dan info /reset.",
+            "usage": "/start",
+            "examples": [
+              "User: /start → Bot: Halo. Aku bot penerjemah otomatis..."
+            ],
+            "notes": "Setelah /start, cukup kirim teks bahasa Inggris tanpa perintah."
+          },
+          {
+            "command": "/help",
+            "description": "Instruksi ringkas dan contoh input/output.",
+            "usage": "/help",
+            "examples": [
+              "User: /help → Bot: Kirim teks bahasa Inggris... Contoh..."
+            ],
+            "notes": "Menjelaskan juga /reset."
+          },
+          {
+            "command": "/reset",
+            "description": "Menghapus memori percakapan user untuk chat ini.",
+            "usage": "/reset",
+            "examples": [
+              "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus."
+            ],
+            "notes": "Jika MONGODB_URI tidak ada, reset hanya menghapus memori in-memory."
+          }
+        ],
+        "aiMessages": [
+          {
+            "role": "user",
+            "content": "buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram"
+          },
+          {
+            "role": "assistant",
+            "content": "Proyek bot Telegram baru sudah dibuat: grammY + @grammyjs/runner long polling, /start /help /reset, handler teks catch-all yang tidak menelan slash commands, balasan untuk pesan non-teks, AI terjemahan via CookMyBots gateway dengan logging, serta long-term memory di MongoDB (fallback Map jika MONGODB_URI kosong). Startup sudah termasuk deleteWebhook drop pending updates, process-level error handlers, bot.catch, dan retry backoff khusus untuk 409 Conflict.\n\nFiles touched (16): .env.sample, DOCS.md, README.md, package.json, project.json, src/bot.js…\nValidation: ✅ project passes syntax/basic checks after this edit."
+          }
+        ],
+        "createdBy": "",
+        "source": "",
+        "description": "",
+        "planMarkdown": "Bot: Bot Telegram Penerjemah Otomatis Inggris ke Indonesia (Production-Ready, Node.js ESM + grammY)\n\nSummary:\nBot ini menerjemahkan teks bahasa Inggris ke bahasa Indonesia secara otomatis di Telegram. Pengguna dapat mengirim pesan teks, meneruskan (forward) pesan, atau membalas (reply) pesan, lalu bot membalas dengan hasil terjemahan. Bot juga menyediakan mode auto-translate per chat, opsi gaya terjemahan (formal/santai), serta fitur dasar operasional seperti rate limiting, logging, dan pelacakan error.\n\nRencana ini mencakup arsitektur single-service Node.js berbasis grammY, pemilihan penyimpanan (MongoDB untuk konfigurasi dan audit), integrasi dengan layanan penerjemahan eksternal melalui HTTP, serta praktik produksi seperti webhook/long polling, manajemen environment variables, observability sederhana, dan strategi keamanan. Setup API Telegram (token, pengaturan bot di BotFather) diasumsikan sudah ada; sisanya dijelaskan end-to-end.\n\nProduct goals:\nTujuan utama\n1) Menerjemahkan teks bahasa Inggris ke bahasa Indonesia dengan cepat dan akurat untuk kebutuhan chat sehari-hari.\n2) Mendukung beberapa cara penggunaan: perintah manual, reply-to-translate, dan mode otomatis per chat.\n3) Memberikan pengalaman yang aman dan tahan gangguan (graceful degradation) saat layanan terjemahan bermasalah.\n\nTujuan produk tambahan\n1) Personalisasi sederhana: mode formal/santai, pilihan apakah mempertahankan format baris, dan preferensi untuk menampilkan teks asli.\n2) Admin controls: pembatasan penggunaan (allowlist/denylist), pemantauan jumlah request, dan kemampuan mematikan fitur tertentu jika terjadi penyalahgunaan.\n3) Kepatuhan operasional: menyimpan jejak minimal (audit ringan) untuk debugging dan metrik tanpa menyimpan konten sensitif berlebihan.\n\nBatasan yang jelas\n1) Fokus bahasa sumber Inggris dan target Indonesia; deteksi bahasa opsional hanya untuk menghindari menerjemahkan teks non-Inggris.\n2) Tidak menangani terjemahan dokumen besar, audio, atau OCR pada tahap awal. Jika nanti ditambah, dilakukan bertahap dengan pipeline terpisah dan pembatasan ukuran.\n\nHigh-level architecture:\nGambaran tinggi\n1) Satu layanan Node.js menjalankan bot grammY.\n2) Lapisan Bot Router: menangani perintah, message handlers, callback queries (jika ada), dan middleware (auth/rate limit).\n3) Lapisan Domain: modul translation service (adapter ke penyedia penerjemahan), modul preferences, modul admin policy.\n4) Lapisan Persistence: MongoDB untuk menyimpan konfigurasi pengguna/chat, pengaturan mode, dan event ringkas (telemetry/audit). In-memory maps dipakai untuk cache jangka pendek dan rate limiting.\n5) Lapisan Observability: structured logging, pelaporan error, dan metrik sederhana berbasis agregasi di MongoDB atau log.\n\nMode update Telegram\n1) Disarankan webhook untuk produksi agar latensi rendah dan efisien; fallback ke long polling untuk environment yang tidak mendukung webhook.\n2) Endpoint webhook harus memverifikasi bahwa request berasal dari Telegram melalui secret path atau header secret token (sesuai kemampuan platform) dan selalu membatasi ukuran payload.\n\nStruktur middleware\n1) Context enrichment: normalisasi userId/chatId, deteksi tipe chat (private/group/supergroup), dan pembacaan konfigurasi dari DB dengan cache.\n2) Rate limiting: per user dan per chat (lebih ketat untuk group), menggunakan in-memory token bucket dengan TTL; untuk multi-instance tidak relevan karena layanan tunggal.\n3) Access control: admin-only commands, allowlist untuk penggunaan di group (opsional), dan blocklist untuk user bermasalah.\n4) Safety checks: menolak input terlalu panjang, menghapus kontrol karakter, dan sanitasi minimal untuk menjaga format.\n\nTranslation adapter\n1) Modul penerjemahan melakukan HTTP request ke API penerjemahan eksternal.\n2) Mendukung retry terbatas dengan backoff untuk error sementara, serta circuit breaker ringan (misalnya menonaktifkan sementara jika banyak error berturut-turut).\n3) Normalisasi hasil: trimming, menjaga line breaks sesuai opsi pengguna, dan menyertakan indikator sumber/target bahasa.\n\nKetahanan dan performa\n1) Cache hasil terjemahan jangka pendek (misalnya 5–30 menit) berdasarkan hash input + opsi, untuk mengurangi biaya dan latensi.\n2) Batas panjang input default (misalnya 2.000–4.000 karakter), dengan pesan error yang jelas jika melebihi.\n3) Antrean internal sederhana berbasis in-memory untuk membatasi concurrency ke API penerjemahan, mencegah overload saat spam.\n\nData model:\nKoleksi MongoDB yang disarankan\n1) users\n   1) id: userId (number/string)\n   2) createdAt, lastSeenAt\n   3) preferences:\n      1) tone: formal | casual\n      2) showOriginal: boolean\n      3) preserveFormatting: boolean\n      4) autoTranslatePrivate: boolean\n   4) status:\n      1) isBlocked: boolean\n      2) isAdmin: boolean (opsional; atau pakai env ADMINUSERIDS)\n   5) stats (agregat ringan): totalRequests, lastRequestAt\n\n2) chats\n   1) id: chatId\n   2) type: private | group | supergroup\n   3) title (opsional untuk audit)\n   4) settings:\n      1) autoTranslate: boolean\n      2) requireEnglishOnly: boolean\n      3) allowInGroup: boolean\n      4) rateLimitProfile: default | strict\n   5) moderation:\n      1) blockedUserIds: array (opsional kecil)\n\n3) translationaudit (opsional, minim data)\n   Tujuan: debugging dan metrik, bukan menyimpan konten sensitif.\n   1) id\n   2) timestamp\n   3) userId, chatId\n   4) inputMeta: length, hash (bukan teks mentah)\n   5) options: tone, preserveFormatting\n   6) resultMeta: length, providerLatencyMs, status: ok|fail, errorCode\n\n4) adminconfig (opsional)\n   1) key-value sederhana untuk toggle global\n   2) maintenanceMode: boolean\n   3) defaultRateLimits\n\nData yang sengaja tidak disimpan\n1) Teks asli dan hasil terjemahan tidak perlu disimpan permanen kecuali pengguna mengaktifkan mode logging eksplisit untuk debugging.\n2) Identitas sensitif di luar Telegram (email/telepon) tidak dikumpulkan.\n\nCache in-memory\n1) translationCache: key = hash(text + options), value = translatedText, expiresAt.\n2) rateLimitBuckets: key = userId atau chatId, value = token bucket state.\n3) configCache: key = userId/chatId, value = preferences/settings dengan TTL pendek (misalnya 30–120 detik).\n\nKey flows:\nFlow 1: /start dan onboarding\n1) User mengirim /start.\n2) Bot menyimpan/menyegarkan profil user (createdAt/lastSeenAt).\n3) Bot mengirim ringkasan cara pakai: kirim teks Inggris, atau reply pesan untuk diterjemahkan, serta cara mengaktifkan mode otomatis.\n\nFlow 2: Terjemahan manual via perintah\n1) User mengirim /translate <teks>.\n2) Bot validasi panjang, rate limit, dan baca preferensi user.\n3) Bot panggil translation adapter.\n4) Bot membalas dengan hasil terjemahan, opsional menyertakan teks asli sesuai preferensi.\n\nFlow 3: Reply-to-translate (paling natural)\n1) User me-reply sebuah pesan berbahasa Inggris dengan /translate atau /tr.\n2) Bot mengambil teks dari pesan yang di-reply.\n3) Bot terjemahkan dan membalas di thread reply yang sama.\n4) Jika pesan yang di-reply bukan teks (stiker/foto), bot memberi instruksi bahwa hanya teks didukung saat ini.\n\nFlow 4: Mode auto-translate per chat\n1) Admin group atau user private mengaktifkan /auto on.\n2) Bot menyimpan chats.settings.autoTranslate = true.\n3) Setiap pesan teks baru di chat:\n   1) Bot cek apakah pesan adalah command; jika ya, lewati.\n   2) Bot cek heuristik bahasa (opsional): jika terlihat bukan Inggris dan requireEnglishOnly aktif, lewati.\n   3) Bot rate limit dan terjemahkan.\n   4) Bot membalas (atau mengirim pesan baru) dengan terjemahan.\n4) /auto off mematikan.\n\nFlow 5: Pengaturan gaya terjemahan\n1) User set /tone formal atau /tone casual.\n2) Bot simpan di users.preferences.tone.\n3) Opsi ini diteruskan ke translation adapter (misalnya sebagai instruksi gaya atau prompt jika provider mendukung).\n\nFlow 6: Error handling dan graceful degradation\n1) Jika provider timeout atau error:\n   1) Bot mengirim pesan singkat: layanan terjemahan sedang bermasalah, coba lagi.\n   2) Bot mencatat audit status fail + errorCode.\n2) Jika input terlalu panjang:\n   1) Bot meminta user memecah teks.\n3) Jika rate limit terlampaui:\n   1) Bot mengembalikan pesan tunggu beberapa detik.\n\nFlow 7: Admin dan operasional\n1) /stats (admin) menampilkan ringkasan request hari ini, error rate, dan top chats (tanpa konten).\n2) /maintenance on mematikan fitur terjemahan untuk semua kecuali admin.\n3) /block <userId> (opsional) menambahkan user ke blocklist.\n\nFlow 8: Privasi\n1) /privacy menampilkan kebijakan singkat: apa yang disimpan (metadata, bukan konten) dan opsi opt-out audit (jika disediakan).\n2) /deleteme menghapus data user dari koleksi users dan preferensi terkait (best-effort) serta menghentikan auto-translate private.\n\nTech stack:\nRuntime dan framework\n1) Node.js (ESM) sebagai single service.\n2) grammY sebagai framework bot Telegram.\n\nKonfigurasi dan secrets\n1) TELEGRAMBOTTOKEN wajib dari environment variables.\n2) MONGODBURI dari environment variables (jika memakai MongoDB).\n3) TRANSLATIONAPIKEY dan TRANSLATIONAPIBASEURL dari environment variables untuk provider penerjemahan eksternal.\n4) ADMINUSERIDS (daftar userId admin) dari environment variables.\n\nPersistensi\n1) MongoDB (sudah terintegrasi) untuk:\n   1) preferensi user\n   2) settings chat\n   3) audit dan metrik ringan (opsional)\n2) In-memory maps untuk:\n   1) cache terjemahan jangka pendek\n   2) rate limiting\n   3) cache konfigurasi TTL pendek\n\nIntegrasi terjemahan\n1) HTTP client untuk memanggil layanan penerjemahan eksternal.\n2) Strategi reliability: timeout ketat, retry terbatas, dan pembatas concurrency.\n\nPenyimpanan file (opsional)\n1) Jika suatu saat mendukung terjemahan dari file teks, simpan sementara di simple filesystem storage atau object storage, dengan TTL dan pembersihan terjadwal.\n\nDeployment\n1) Dijalankan pada Node.js server di cloud sebagai satu proses layanan.\n2) Mendukung webhook (disarankan) atau long polling.\n3) Logging keluar ke stdout/stderr untuk dikumpulkan oleh platform hosting.\n\nCatatan pembatasan\n1) Tidak menambahkan database atau infrastruktur lain di luar MongoDB atau in-memory.\n2) Tidak memakai message queue eksternal; kontrol beban dilakukan internal dalam proses.\n\nNon-functional requirements:\nKeamanan\n1) Validasi input: batasi panjang teks, tolak payload aneh, dan pastikan hanya memproses message types yang didukung.\n2) Proteksi webhook: gunakan secret path atau secret token, dan batasi request size.\n3) Minimal data: simpan metadata seperlunya, hindari menyimpan isi pesan kecuali benar-benar dibutuhkan.\n4) Admin-only operations: semua perintah admin harus diverifikasi dengan ADMINUSERIDS.\n\nKeandalan\n1) Timeout ketat ke provider terjemahan dan fallback pesan yang ramah.\n2) Retry hanya untuk error transient dan dibatasi agar tidak memperparah beban.\n3) Circuit breaker ringan: jika error beruntun, hentikan sementara pemanggilan provider dan informasikan user.\n\nSkalabilitas (dalam batas single service)\n1) Rate limiting per user/chat untuk menahan spam.\n2) Concurrency limiter untuk panggilan terjemahan.\n3) Cache hasil terjemahan TTL untuk mengurangi biaya.\n\nObservability\n1) Structured logging untuk event penting: command dipakai, request translate, error provider, rate limited.\n2) Audit tanpa konten: simpan hash dan panjang input saja.\n3) Admin /stats untuk melihat kondisi bot tanpa akses ke data sensitif.\n\nKualitas dan maintainability\n1) Pemisahan modul: handlers, services, repositories (Mongo), dan middleware.\n2) Konfigurasi berbasis environment variables, dengan validasi saat startup.\n3) Pengujian: minimal unit test untuk parser input, rate limit, dan adapter normalisasi hasil.\n\nKepatuhan operasional\n1) Retensi audit pendek (misalnya 7–30 hari) dengan job pembersihan periodik.\n2) Kemampuan hapus data user via /deleteme.\n3) Pesan /privacy menjelaskan dengan jelas apa yang disimpan dan tujuan penyimpanannya.\n\nBot commands:\n• /start — Memulai bot dan melihat cara penggunaan. (usage: /start) [general]\n• /help — Menampilkan bantuan singkat dan daftar fitur. (usage: /help) [general]\n• /translate — Menerjemahkan teks Inggris ke Indonesia secara manual, atau gunakan dengan reply ke pesan. (usage: 1) /translate This is a test\n2) Reply sebuah pesan lalu kirim /translate) [translation]\n• /tr — Alias singkat untuk /translate. (usage: 1) /tr Please translate this\n2) Reply pesan lalu /tr) [translation]\n• /auto — Mengaktifkan atau mematikan mode terjemahan otomatis untuk chat saat ini. (usage: 1) /auto on\n2) /auto off\n3) /auto status) [translation]\n• /tone — Mengatur gaya terjemahan (formal atau santai). (usage: 1) /tone formal\n2) /tone casual\n3) /tone status) [settings]\n• /original — Menampilkan atau menyembunyikan teks asli pada hasil terjemahan. (usage: 1) /original on\n2) /original off\n3) /original status) [settings]\n• /format — Mengatur apakah format baris (line breaks) dipertahankan. (usage: 1) /format preserve\n2) /format compact\n3) /format status) [settings]\n• /privacy — Menjelaskan kebijakan privasi dan data yang disimpan bot. (usage: /privacy) [general]\n• /deleteme — Menghapus data preferensi pengguna dari database (best-effort). (usage: /deleteme) [general]\n• /stats — Ringkasan metrik penggunaan dan error (khusus admin). (usage: /stats) [admin]\n• /maintenance — Mengaktifkan/mematikan mode perawatan global (khusus admin). (usage: 1) /maintenance on\n2) /maintenance off\n3) /maintenance status) [admin]\n• /block — Memblokir user tertentu dari menggunakan bot (khusus admin, opsional). (usage: /block <userId>) [admin]\n• /unblock — Membuka blokir user tertentu (khusus admin, opsional). (usage: /unblock <userId>) [admin]\n",
+        "planSections": {
+          "productGoals": "Tujuan utama\n1) Menerjemahkan teks bahasa Inggris ke bahasa Indonesia dengan cepat dan akurat untuk kebutuhan chat sehari-hari.\n2) Mendukung beberapa cara penggunaan: perintah manual, reply-to-translate, dan mode otomatis per chat.\n3) Memberikan pengalaman yang aman dan tahan gangguan (graceful degradation) saat layanan terjemahan bermasalah.\n\nTujuan produk tambahan\n1) Personalisasi sederhana: mode formal/santai, pilihan apakah mempertahankan format baris, dan preferensi untuk menampilkan teks asli.\n2) Admin controls: pembatasan penggunaan (allowlist/denylist), pemantauan jumlah request, dan kemampuan mematikan fitur tertentu jika terjadi penyalahgunaan.\n3) Kepatuhan operasional: menyimpan jejak minimal (audit ringan) untuk debugging dan metrik tanpa menyimpan konten sensitif berlebihan.\n\nBatasan yang jelas\n1) Fokus bahasa sumber Inggris dan target Indonesia; deteksi bahasa opsional hanya untuk menghindari menerjemahkan teks non-Inggris.\n2) Tidak menangani terjemahan dokumen besar, audio, atau OCR pada tahap awal. Jika nanti ditambah, dilakukan bertahap dengan pipeline terpisah dan pembatasan ukuran.",
+          "highLevelArchitecture": "Gambaran tinggi\n1) Satu layanan Node.js menjalankan bot grammY.\n2) Lapisan Bot Router: menangani perintah, message handlers, callback queries (jika ada), dan middleware (auth/rate limit).\n3) Lapisan Domain: modul translation service (adapter ke penyedia penerjemahan), modul preferences, modul admin policy.\n4) Lapisan Persistence: MongoDB untuk menyimpan konfigurasi pengguna/chat, pengaturan mode, dan event ringkas (telemetry/audit). In-memory maps dipakai untuk cache jangka pendek dan rate limiting.\n5) Lapisan Observability: structured logging, pelaporan error, dan metrik sederhana berbasis agregasi di MongoDB atau log.\n\nMode update Telegram\n1) Disarankan webhook untuk produksi agar latensi rendah dan efisien; fallback ke long polling untuk environment yang tidak mendukung webhook.\n2) Endpoint webhook harus memverifikasi bahwa request berasal dari Telegram melalui secret path atau header secret token (sesuai kemampuan platform) dan selalu membatasi ukuran payload.\n\nStruktur middleware\n1) Context enrichment: normalisasi userId/chatId, deteksi tipe chat (private/group/supergroup), dan pembacaan konfigurasi dari DB dengan cache.\n2) Rate limiting: per user dan per chat (lebih ketat untuk group), menggunakan in-memory token bucket dengan TTL; untuk multi-instance tidak relevan karena layanan tunggal.\n3) Access control: admin-only commands, allowlist untuk penggunaan di group (opsional), dan blocklist untuk user bermasalah.\n4) Safety checks: menolak input terlalu panjang, menghapus kontrol karakter, dan sanitasi minimal untuk menjaga format.\n\nTranslation adapter\n1) Modul penerjemahan melakukan HTTP request ke API penerjemahan eksternal.\n2) Mendukung retry terbatas dengan backoff untuk error sementara, serta circuit breaker ringan (misalnya menonaktifkan sementara jika banyak error berturut-turut).\n3) Normalisasi hasil: trimming, menjaga line breaks sesuai opsi pengguna, dan menyertakan indikator sumber/target bahasa.\n\nKetahanan dan performa\n1) Cache hasil terjemahan jangka pendek (misalnya 5–30 menit) berdasarkan hash input + opsi, untuk mengurangi biaya dan latensi.\n2) Batas panjang input default (misalnya 2.000–4.000 karakter), dengan pesan error yang jelas jika melebihi.\n3) Antrean internal sederhana berbasis in-memory untuk membatasi concurrency ke API penerjemahan, mencegah overload saat spam.",
+          "dataModel": "Koleksi MongoDB yang disarankan\n1) users\n   1) id: userId (number/string)\n   2) createdAt, lastSeenAt\n   3) preferences:\n      1) tone: formal | casual\n      2) showOriginal: boolean\n      3) preserveFormatting: boolean\n      4) autoTranslatePrivate: boolean\n   4) status:\n      1) isBlocked: boolean\n      2) isAdmin: boolean (opsional; atau pakai env ADMINUSERIDS)\n   5) stats (agregat ringan): totalRequests, lastRequestAt\n\n2) chats\n   1) id: chatId\n   2) type: private | group | supergroup\n   3) title (opsional untuk audit)\n   4) settings:\n      1) autoTranslate: boolean\n      2) requireEnglishOnly: boolean\n      3) allowInGroup: boolean\n      4) rateLimitProfile: default | strict\n   5) moderation:\n      1) blockedUserIds: array (opsional kecil)\n\n3) translationaudit (opsional, minim data)\n   Tujuan: debugging dan metrik, bukan menyimpan konten sensitif.\n   1) id\n   2) timestamp\n   3) userId, chatId\n   4) inputMeta: length, hash (bukan teks mentah)\n   5) options: tone, preserveFormatting\n   6) resultMeta: length, providerLatencyMs, status: ok|fail, errorCode\n\n4) adminconfig (opsional)\n   1) key-value sederhana untuk toggle global\n   2) maintenanceMode: boolean\n   3) defaultRateLimits\n\nData yang sengaja tidak disimpan\n1) Teks asli dan hasil terjemahan tidak perlu disimpan permanen kecuali pengguna mengaktifkan mode logging eksplisit untuk debugging.\n2) Identitas sensitif di luar Telegram (email/telepon) tidak dikumpulkan.\n\nCache in-memory\n1) translationCache: key = hash(text + options), value = translatedText, expiresAt.\n2) rateLimitBuckets: key = userId atau chatId, value = token bucket state.\n3) configCache: key = userId/chatId, value = preferences/settings dengan TTL pendek (misalnya 30–120 detik).",
+          "keyFlows": "Flow 1: /start dan onboarding\n1) User mengirim /start.\n2) Bot menyimpan/menyegarkan profil user (createdAt/lastSeenAt).\n3) Bot mengirim ringkasan cara pakai: kirim teks Inggris, atau reply pesan untuk diterjemahkan, serta cara mengaktifkan mode otomatis.\n\nFlow 2: Terjemahan manual via perintah\n1) User mengirim /translate <teks>.\n2) Bot validasi panjang, rate limit, dan baca preferensi user.\n3) Bot panggil translation adapter.\n4) Bot membalas dengan hasil terjemahan, opsional menyertakan teks asli sesuai preferensi.\n\nFlow 3: Reply-to-translate (paling natural)\n1) User me-reply sebuah pesan berbahasa Inggris dengan /translate atau /tr.\n2) Bot mengambil teks dari pesan yang di-reply.\n3) Bot terjemahkan dan membalas di thread reply yang sama.\n4) Jika pesan yang di-reply bukan teks (stiker/foto), bot memberi instruksi bahwa hanya teks didukung saat ini.\n\nFlow 4: Mode auto-translate per chat\n1) Admin group atau user private mengaktifkan /auto on.\n2) Bot menyimpan chats.settings.autoTranslate = true.\n3) Setiap pesan teks baru di chat:\n   1) Bot cek apakah pesan adalah command; jika ya, lewati.\n   2) Bot cek heuristik bahasa (opsional): jika terlihat bukan Inggris dan requireEnglishOnly aktif, lewati.\n   3) Bot rate limit dan terjemahkan.\n   4) Bot membalas (atau mengirim pesan baru) dengan terjemahan.\n4) /auto off mematikan.\n\nFlow 5: Pengaturan gaya terjemahan\n1) User set /tone formal atau /tone casual.\n2) Bot simpan di users.preferences.tone.\n3) Opsi ini diteruskan ke translation adapter (misalnya sebagai instruksi gaya atau prompt jika provider mendukung).\n\nFlow 6: Error handling dan graceful degradation\n1) Jika provider timeout atau error:\n   1) Bot mengirim pesan singkat: layanan terjemahan sedang bermasalah, coba lagi.\n   2) Bot mencatat audit status fail + errorCode.\n2) Jika input terlalu panjang:\n   1) Bot meminta user memecah teks.\n3) Jika rate limit terlampaui:\n   1) Bot mengembalikan pesan tunggu beberapa detik.\n\nFlow 7: Admin dan operasional\n1) /stats (admin) menampilkan ringkasan request hari ini, error rate, dan top chats (tanpa konten).\n2) /maintenance on mematikan fitur terjemahan untuk semua kecuali admin.\n3) /block <userId> (opsional) menambahkan user ke blocklist.\n\nFlow 8: Privasi\n1) /privacy menampilkan kebijakan singkat: apa yang disimpan (metadata, bukan konten) dan opsi opt-out audit (jika disediakan).\n2) /deleteme menghapus data user dari koleksi users dan preferensi terkait (best-effort) serta menghentikan auto-translate private.",
+          "techStack": "Runtime dan framework\n1) Node.js (ESM) sebagai single service.\n2) grammY sebagai framework bot Telegram.\n\nKonfigurasi dan secrets\n1) TELEGRAMBOTTOKEN wajib dari environment variables.\n2) MONGODBURI dari environment variables (jika memakai MongoDB).\n3) TRANSLATIONAPIKEY dan TRANSLATIONAPIBASEURL dari environment variables untuk provider penerjemahan eksternal.\n4) ADMINUSERIDS (daftar userId admin) dari environment variables.\n\nPersistensi\n1) MongoDB (sudah terintegrasi) untuk:\n   1) preferensi user\n   2) settings chat\n   3) audit dan metrik ringan (opsional)\n2) In-memory maps untuk:\n   1) cache terjemahan jangka pendek\n   2) rate limiting\n   3) cache konfigurasi TTL pendek\n\nIntegrasi terjemahan\n1) HTTP client untuk memanggil layanan penerjemahan eksternal.\n2) Strategi reliability: timeout ketat, retry terbatas, dan pembatas concurrency.\n\nPenyimpanan file (opsional)\n1) Jika suatu saat mendukung terjemahan dari file teks, simpan sementara di simple filesystem storage atau object storage, dengan TTL dan pembersihan terjadwal.\n\nDeployment\n1) Dijalankan pada Node.js server di cloud sebagai satu proses layanan.\n2) Mendukung webhook (disarankan) atau long polling.\n3) Logging keluar ke stdout/stderr untuk dikumpulkan oleh platform hosting.\n\nCatatan pembatasan\n1) Tidak menambahkan database atau infrastruktur lain di luar MongoDB atau in-memory.\n2) Tidak memakai message queue eksternal; kontrol beban dilakukan internal dalam proses.",
+          "nonFunctional": "Keamanan\n1) Validasi input: batasi panjang teks, tolak payload aneh, dan pastikan hanya memproses message types yang didukung.\n2) Proteksi webhook: gunakan secret path atau secret token, dan batasi request size.\n3) Minimal data: simpan metadata seperlunya, hindari menyimpan isi pesan kecuali benar-benar dibutuhkan.\n4) Admin-only operations: semua perintah admin harus diverifikasi dengan ADMINUSERIDS.\n\nKeandalan\n1) Timeout ketat ke provider terjemahan dan fallback pesan yang ramah.\n2) Retry hanya untuk error transient dan dibatasi agar tidak memperparah beban.\n3) Circuit breaker ringan: jika error beruntun, hentikan sementara pemanggilan provider dan informasikan user.\n\nSkalabilitas (dalam batas single service)\n1) Rate limiting per user/chat untuk menahan spam.\n2) Concurrency limiter untuk panggilan terjemahan.\n3) Cache hasil terjemahan TTL untuk mengurangi biaya.\n\nObservability\n1) Structured logging untuk event penting: command dipakai, request translate, error provider, rate limited.\n2) Audit tanpa konten: simpan hash dan panjang input saja.\n3) Admin /stats untuk melihat kondisi bot tanpa akses ke data sensitif.\n\nKualitas dan maintainability\n1) Pemisahan modul: handlers, services, repositories (Mongo), dan middleware.\n2) Konfigurasi berbasis environment variables, dengan validasi saat startup.\n3) Pengujian: minimal unit test untuk parser input, rate limit, dan adapter normalisasi hasil.\n\nKepatuhan operasional\n1) Retensi audit pendek (misalnya 7–30 hari) dengan job pembersihan periodik.\n2) Kemampuan hapus data user via /deleteme.\n3) Pesan /privacy menjelaskan dengan jelas apa yang disimpan dan tujuan penyimpanannya."
+        },
+        "balanceCentsRemaining": 123,
+        "billing": {
+          "ok": true,
+          "charged": 25,
+          "remaining": 123,
+          "chargedCents": 25,
+          "remainingCents": 123,
+          "currency": "USD",
+          "baseUsd": 0.12656599999999998,
+          "markupUsd": 0.12656599999999998,
+          "platformFeeUsd": 0,
+          "totalUsd": 0.25313199999999997
+        },
+        "title": "Bot Telegram Penerjemah Otom"
+      }
+    }
+  },
+  "runStatus": {
+    "phase": "done",
+    "stage": "cold_start",
+    "runId": "430db95b-d7ab-42ed-859d-16990c9cbe09:mlmflgpn:4bw4t0",
+    "lastUserMessage": "buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram",
+    "startedAt": "2026-02-14T14:48:10.729Z",
+    "updatedAt": "2026-02-14T14:49:47.414Z",
+    "message": "GitHub auto-push skipped (no repo linked or GitHub not connected in session).",
+    "commands": [
+      {
+        "name": "help",
+        "file": "src/commands/help.js"
+      },
+      {
+        "name": "reset",
+        "file": "src/commands/reset.js"
+      },
+      {
+        "name": "start",
+        "file": "src/commands/start.js"
+      }
+    ],
+    "ok": true,
+    "state": {
+      "projectId": "430db95b-d7ab-42ed-859d-16990c9cbe09",
+      "fileStructure": {
+        ".env.sample": {
+          "type": "file",
+          "content": "TELEGRAM_BOT_TOKEN=\nMONGODB_URI=\nCOOKMYBOTS_AI_ENDPOINT=\nCOOKMYBOTS_AI_KEY=\nAI_TIMEOUT_MS=\nAI_MAX_RETRIES=\nCONCURRENCY=\n"
+        },
+        "CHANGELOG.md": {
+          "type": "file",
+          "content": "# Changelog\n\nAll notable changes to this bot project are recorded here.\n\n## 2026-02-14 14:49:47. UTC\n- Request: buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram\n- Summary: Proyek bot Telegram baru sudah dibuat: grammY + @grammyjs/runner long polling, /start /help /reset, handler teks catch-all yang tidak menelan slash commands, balasan untuk pesan non-teks, AI terjemahan via CookMyBots ga…\n- Files: .env.sample, DOCS.md, README.md, package.json, project.json, src/bot.js, src/commands/help.js, src/commands/loader.js, src/commands/reset.js, src/commands/start.js, src/index.js, src/lib/ai.js, src/lib/config.js, src/lib/db.js (+2 more)\n\n"
+        },
+        "DOCS.md": {
+          "type": "file",
+          "content": "Bot ini menerjemahkan pesan teks dari bahasa Inggris ke Bahasa Indonesia.\n\nCara pakai\nKirim pesan teks bahasa Inggris, bot akan membalas dengan terjemahan Bahasa Indonesia.\n\nPerintah\n1) /start\nPerkenalan singkat dan cara pakai.\n\n2) /help\nInstruksi ringkas dan contoh.\n\n3) /reset\nMenghapus memori percakapan kamu untuk chat ini.\n\nContoh\nUser: I will be late for the meeting.\nBot: Aku akan terlambat untuk rapat.\n\nEnvironment variables\n1) TELEGRAM_BOT_TOKEN\nToken bot Telegram dari BotFather.\n\n2) MONGODB_URI\nKoneksi MongoDB untuk menyimpan memori percakapan. Jika tidak diisi, bot tetap berjalan dengan memori in-memory.\n\n3) COOKMYBOTS_AI_ENDPOINT\nBase URL AI gateway CookMyBots. Bot akan memanggil endpoint ini + /chat.\n\n4) COOKMYBOTS_AI_KEY\nAPI key untuk AI gateway CookMyBots.\n\n5) AI_TIMEOUT_MS\nTimeout request AI (default 600000).\n\n6) AI_MAX_RETRIES\nJumlah retry untuk error sementara (default 2).\n\n7) CONCURRENCY\nConcurrency runner grammY (default 20).\n"
+        },
+        "README.md": {
+          "type": "file",
+          "content": "Bot Telegram penerjemah otomatis bahasa Inggris ke Bahasa Indonesia.\n\nCara pakai cepat\n1) Set TELEGRAM_BOT_TOKEN\n2) Jalankan bot\n3) Kirim teks bahasa Inggris, bot akan membalas terjemahan bahasa Indonesia\n\nFitur\n1) Terjemahan otomatis untuk setiap pesan teks non-perintah\n2) Perintah /start, /help, /reset\n3) Memori jangka panjang (MongoDB) untuk konteks terjemahan; fallback in-memory jika MONGODB_URI tidak diset\n4) Long polling via @grammyjs/runner untuk deployment yang stabil\n5) Proteksi dasar: in-flight guard per chat untuk menghindari banyak request bersamaan\n\nSetup\n1) Install\nnpm install\n\n2) Buat file .env dari .env.sample lalu isi TELEGRAM_BOT_TOKEN\n\n3) Jalankan lokal\nnpm run dev\n\n4) Jalankan production\nnpm start\n\nEnvironment variables\n1) TELEGRAM_BOT_TOKEN (wajib)\n2) MONGODB_URI (opsional, tapi disarankan untuk memory persisten)\n3) COOKMYBOTS_AI_ENDPOINT (wajib untuk AI, biasanya sudah disediakan CookMyBots). Default: https://api.cookmybots.com/api/ai\n4) COOKMYBOTS_AI_KEY (wajib untuk AI, biasanya sudah disediakan CookMyBots)\n5) AI_TIMEOUT_MS (opsional, default 600000)\n6) AI_MAX_RETRIES (opsional, default 2)\n7) CONCURRENCY (opsional, default 20)\n\nPerintah\n1) /start\nMenjelaskan cara pakai.\n\n2) /help\nInstruksi singkat + contoh.\n\n3) /reset\nMenghapus memori percakapan user pada chat tersebut.\n\nDatabase\nKoleksi: memory_messages\nField minimal:\nplatform, userId, chatId, role, text, ts\n\nTroubleshooting\n1) Bot tidak jalan dan minta token\nPastikan TELEGRAM_BOT_TOKEN sudah diset.\n\n2) Bot jalan tapi tidak membalas\nPeriksa log untuk error 409 Conflict atau error Telegram API.\n\n3) Memory tidak persisten\nSet MONGODB_URI. Jika tidak ada, bot akan pakai in-memory dan log warning.\n"
+        },
+        "package.json": {
+          "type": "file",
+          "content": "{\n  \"scripts\": {\n    \"install:root\": \"bash -lc \\\"set -e; if [ -f package-lock.json ]; then npm ci; else npm install; fi\\\"\",\n    \"build\": \"npm run install:root && echo build\",\n    \"start\": \"node src/index.js\",\n    \"dev\": \"node --watch src/index.js\"\n  },\n  \"dependencies\": {\n    \"@grammyjs/runner\": \"^2.0.3\",\n    \"axios\": \"^1.7.9\",\n    \"dotenv\": \"^16.4.5\",\n    \"grammy\": \"^1.20.0\",\n    \"mongodb\": \"^6.10.0\"\n  },\n  \"name\": \"en-id-translator-bot\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"engines\": {\n    \"node\": \">=18\"\n  },\n  \"devDependencies\": {}\n}\n"
+        },
+        "src": {
+          "type": "dir",
+          "children": {
+            "bot.js": {
+              "type": "file",
+              "content": "import { Bot } from \"grammy\";\n\nimport { registerCommands } from \"./commands/loader.js\";\nimport { translateEnglishToIndonesian } from \"./lib/ai.js\";\nimport { addTurn, getRecentTurns, clearMemory } from \"./lib/memory.js\";\nimport { log, safeErr } from \"./lib/logging.js\";\n\nexport function createBot(token) {\n  const bot = new Bot(token);\n\n  bot.catch((err) => {\n    const ctx = err?.ctx;\n    log.error(\"bot error\", {\n      err: safeErr(err?.error || err),\n      chatId: ctx?.chat?.id ? String(ctx.chat.id) : \"\",\n      fromId: ctx?.from?.id ? String(ctx.from.id) : \"\"\n    });\n  });\n\n  registerCommands(bot);\n\n  const inFlightByChat = new Map();\n\n  bot.on(\"message:text\", async (ctx, next) => {\n    const raw = ctx.message?.text || \"\";\n    if (raw.startsWith(\"/\")) return next();\n\n    const chatId = ctx.chat?.id;\n    const userId = ctx.from?.id;\n\n    if (!chatId || !userId) {\n      return ctx.reply(\"Maaf, aku butuh info chat dan user untuk memproses pesan ini.\");\n    }\n\n    const key = String(chatId);\n    if (inFlightByChat.get(key)) {\n      return ctx.reply(\"Sedang menerjemahkan pesan sebelumnya. Coba lagi sebentar ya.\");\n    }\n\n    inFlightByChat.set(key, true);\n\n    try {\n      const text = raw.trim();\n      if (!text) return;\n\n      await addTurn({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId),\n        role: \"user\",\n        text\n      });\n\n      const history = await getRecentTurns({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId),\n        limit: 16\n      });\n\n      const translated = await translateEnglishToIndonesian({\n        userText: text,\n        history\n      });\n\n      await ctx.reply(translated || \"Maaf, aku belum dapat hasil terjemahan.\");\n\n      await addTurn({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId),\n        role: \"assistant\",\n        text: translated || \"\"\n      });\n    } catch (e) {\n      log.error(\"translate handler failed\", { err: safeErr(e) });\n      await ctx.reply(\"Maaf, terjadi kendala saat menerjemahkan. Coba lagi sebentar ya.\");\n    } finally {\n      inFlightByChat.delete(key);\n    }\n  });\n\n  bot.on(\"message\", async (ctx) => {\n    const hasText = !!ctx.message?.text;\n    if (hasText) return;\n    await ctx.reply(\"Aku hanya bisa menerjemahkan pesan teks (bahasa Inggris ke Indonesia). Kirim teks ya.\");\n  });\n\n  bot.command(\"_internal_reset_inflight\", async (ctx) => {\n    const chatId = ctx.chat?.id;\n    if (chatId) inFlightByChat.delete(String(chatId));\n    await ctx.reply(\"OK\");\n  });\n\n  bot.command(\"reset\", async (ctx) => {\n    const chatId = ctx.chat?.id;\n    const userId = ctx.from?.id;\n\n    if (!chatId || !userId) return ctx.reply(\"Maaf, tidak bisa menentukan chat/user.\");\n\n    try {\n      await clearMemory({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId)\n      });\n      await ctx.reply(\"Riwayat percakapan kamu untuk chat ini sudah dihapus.\");\n    } catch (e) {\n      log.error(\"reset failed\", { err: safeErr(e) });\n      await ctx.reply(\"Maaf, gagal menghapus riwayat. Coba lagi sebentar ya.\");\n    }\n  });\n\n  return bot;\n}\n"
+            },
+            "commands": {
+              "type": "dir",
+              "children": {
+                "help.js": {
+                  "type": "file",
+                  "content": "export default function register(bot) {\n  bot.command(\"help\", async (ctx) => {\n    await ctx.reply(\n      \"Kirim teks bahasa Inggris, aku akan menerjemahkan ke Bahasa Indonesia.\\n\\nContoh:\\nUser: I will be late for the meeting.\\nBot: Aku akan terlambat untuk rapat.\\n\\nPerintah:\\n/start untuk info singkat\\n/help untuk bantuan\\n/reset untuk menghapus riwayat percakapan\"\n    );\n  });\n}\n"
+                },
+                "loader.js": {
+                  "type": "file",
+                  "content": "import fs from \"node:fs\";\nimport path from \"node:path\";\nimport { fileURLToPath, pathToFileURL } from \"node:url\";\n\nimport { log } from \"../lib/logging.js\";\n\nexport function registerCommands(bot) {\n  const dir = path.dirname(fileURLToPath(import.meta.url));\n\n  const files = fs\n    .readdirSync(dir)\n    .filter((f) => f.endsWith(\".js\"))\n    .filter((f) => f !== \"loader.js\")\n    .filter((f) => !f.startsWith(\"_\"));\n\n  for (const f of files) {\n    const url = pathToFileURL(path.join(dir, f)).href;\n    import(url)\n      .then((mod) => {\n        const fn = mod?.default || mod?.register;\n        if (typeof fn === \"function\") {\n          fn(bot);\n          log.info(\"command registered\", { file: f });\n        } else {\n          log.warn(\"command skipped (no export)\", { file: f });\n        }\n      })\n      .catch((e) => {\n        log.error(\"command import failed\", { file: f, err: String(e?.message || e) });\n      });\n  }\n}\n"
+                },
+                "reset.js": {
+                  "type": "file",
+                  "content": "import { clearMemory } from \"../lib/memory.js\";\nimport { log, safeErr } from \"../lib/logging.js\";\n\nexport default function register(bot) {\n  bot.command(\"reset\", async (ctx) => {\n    const chatId = ctx.chat?.id;\n    const userId = ctx.from?.id;\n\n    if (!chatId || !userId) {\n      return ctx.reply(\"Maaf, tidak bisa menentukan chat/user untuk reset.\");\n    }\n\n    try {\n      await clearMemory({\n        platform: \"telegram\",\n        userId: String(userId),\n        chatId: String(chatId)\n      });\n      await ctx.reply(\"Riwayat percakapan kamu untuk chat ini sudah dihapus.\");\n    } catch (e) {\n      log.error(\"/reset failed\", { err: safeErr(e) });\n      await ctx.reply(\"Maaf, gagal menghapus riwayat. Coba lagi sebentar ya.\");\n    }\n  });\n}\n"
+                },
+                "start.js": {
+                  "type": "file",
+                  "content": "export default function register(bot) {\n  bot.command(\"start\", async (ctx) => {\n    await ctx.reply(\n      \"Halo. Aku bot penerjemah otomatis dari bahasa Inggris ke Bahasa Indonesia.\\n\\nCara pakai: kirim teks bahasa Inggris, nanti aku balas terjemahannya.\\nKalau ingin hapus riwayat percakapan, pakai /reset.\"\n    );\n  });\n}\n"
+                }
+              }
+            },
+            "index.js": {
+              "type": "file",
+              "content": "import \"dotenv/config\";\n\nimport { run } from \"@grammyjs/runner\";\n\nimport { cfg } from \"./lib/config.js\";\nimport { log, safeErr } from \"./lib/logging.js\";\nimport { createBot } from \"./bot.js\";\n\nprocess.on(\"unhandledRejection\", (reason) => {\n  log.error(\"process unhandledRejection\", { err: safeErr(reason) });\n  process.exit(1);\n});\n\nprocess.on(\"uncaughtException\", (err) => {\n  log.error(\"process uncaughtException\", { err: safeErr(err) });\n  process.exit(1);\n});\n\nfunction sleep(ms) {\n  return new Promise((r) => setTimeout(r, ms));\n}\n\nasync function deleteWebhookSafe(bot) {\n  try {\n    await bot.api.deleteWebhook({ drop_pending_updates: true });\n    log.info(\"telegram deleteWebhook ok\", { dropPendingUpdates: true });\n  } catch (e) {\n    log.warn(\"telegram deleteWebhook failed\", { err: safeErr(e) });\n  }\n}\n\nasync function startPollingWithConflictBackoff(bot) {\n  const backoffs = [2000, 5000, 10000, 20000];\n  let i = 0;\n\n  while (true) {\n    try {\n      log.info(\"polling start\", { mode: \"long_polling\", concurrency: cfg.CONCURRENCY });\n      const runner = run(bot, { concurrency: cfg.CONCURRENCY });\n      await runner.task();\n      log.warn(\"polling stopped\", { reason: \"runner.task resolved\" });\n      i = 0;\n    } catch (e) {\n      const msg = safeErr(e);\n      const code = e?.error_code || e?.response?.status;\n      const isConflict = code === 409 || String(msg).includes(\"409\");\n\n      if (isConflict) {\n        const waitMs = backoffs[Math.min(i, backoffs.length - 1)];\n        log.warn(\"polling conflict (409) - retrying\", { waitMs, err: msg });\n        await sleep(waitMs);\n        i += 1;\n        continue;\n      }\n\n      log.error(\"polling failed\", { err: msg });\n      throw e;\n    }\n  }\n}\n\nasync function boot() {\n  log.info(\"boot start\", {\n    platform: \"telegram\",\n    polling: true,\n    TELEGRAM_BOT_TOKEN_set: !!cfg.TELEGRAM_BOT_TOKEN,\n    MONGODB_URI_set: !!cfg.MONGODB_URI,\n    COOKMYBOTS_AI_ENDPOINT_set: !!cfg.COOKMYBOTS_AI_ENDPOINT,\n    COOKMYBOTS_AI_KEY_set: !!cfg.COOKMYBOTS_AI_KEY\n  });\n\n  if (!cfg.TELEGRAM_BOT_TOKEN) {\n    console.error(\"TELEGRAM_BOT_TOKEN is required. Set it in environment variables and redeploy.\");\n    process.exit(1);\n  }\n\n  const bot = createBot(cfg.TELEGRAM_BOT_TOKEN);\n\n  try {\n    await bot.init();\n  } catch (e) {\n    log.warn(\"bot.init failed\", { err: safeErr(e) });\n  }\n\n  await deleteWebhookSafe(bot);\n  await startPollingWithConflictBackoff(bot);\n}\n\nboot().catch((e) => {\n  log.error(\"boot failed\", { err: safeErr(e) });\n  process.exit(1);\n});\n"
+            },
+            "lib": {
+              "type": "dir",
+              "children": {
+                "ai.js": {
+                  "type": "file",
+                  "content": "import axios from \"axios\";\n\nimport { cfg } from \"./config.js\";\nimport { log, safeErr } from \"./logging.js\";\n\nfunction sleep(ms) {\n  return new Promise((r) => setTimeout(r, ms));\n}\n\nfunction buildMessages({ history, userText }) {\n  const system =\n    \"Kamu adalah penerjemah dari bahasa Inggris ke Bahasa Indonesia. \" +\n    \"Tugasmu hanya menerjemahkan. Jaga arti, nada, dan struktur. \" +\n    \"Pertahankan baris baru persis seperti sumber. \" +\n    \"Jangan menambah penjelasan kecuali diminta user. \" +\n    \"Jika ada istilah teknis, pertahankan istilah penting dalam bahasa aslinya bila lebih umum, \" +\n    \"dengan penyesuaian yang natural.\";\n\n  const turns = Array.isArray(history) ? history : [];\n  const filtered = turns\n    .filter((t) => t && (t.role === \"user\" || t.role === \"assistant\"))\n    .map((t) => ({ role: t.role, content: String(t.text || \"\") }));\n\n  return [{ role: \"system\", content: system }, ...filtered, { role: \"user\", content: userText }];\n}\n\nexport async function translateEnglishToIndonesian({ userText, history }) {\n  const endpointBase = String(cfg.COOKMYBOTS_AI_ENDPOINT || \"\").replace(/\\/+$/, \"\");\n  const url = endpointBase ? `${endpointBase}/chat` : \"\";\n\n  if (!url || !cfg.COOKMYBOTS_AI_KEY) {\n    log.error(\"ai config missing\", {\n      COOKMYBOTS_AI_ENDPOINT_set: !!cfg.COOKMYBOTS_AI_ENDPOINT,\n      COOKMYBOTS_AI_KEY_set: !!cfg.COOKMYBOTS_AI_KEY\n    });\n    return \"Maaf, AI penerjemah belum dikonfigurasi. Coba hubungi admin bot.\";\n  }\n\n  const timeoutMs = cfg.AI_TIMEOUT_MS;\n  const maxRetries = cfg.AI_MAX_RETRIES;\n\n  const messages = buildMessages({ history, userText });\n\n  for (let attempt = 0; attempt <= maxRetries; attempt++) {\n    const meta = { feature: \"translate\", attempt };\n    log.info(\"ai call start\", meta);\n\n    try {\n      const res = await axios.post(\n        url,\n        {\n          messages,\n          meta: { platform: \"telegram\", feature: \"translate\" }\n        },\n        {\n          timeout: timeoutMs,\n          headers: {\n            Authorization: `Bearer ${cfg.COOKMYBOTS_AI_KEY}`,\n            \"Content-Type\": \"application/json\"\n          }\n        }\n      );\n\n      const data = res?.data;\n      const out = data?.output;\n      const content = typeof out?.content === \"string\" ? out.content : \"\";\n\n      if (!data?.ok) {\n        log.warn(\"ai call non-ok\", { ...meta, err: String(data?.error || data?.message || \"non-ok\") });\n      }\n\n      if (!content) {\n        log.warn(\"ai call missing content\", { ...meta });\n        return \"Maaf, aku tidak menerima hasil terjemahan dari AI.\";\n      }\n\n      log.info(\"ai call success\", { ...meta });\n      return content.trim();\n    } catch (e) {\n      const errMsg = safeErr(e);\n      log.error(\"ai call failed\", { ...meta, err: errMsg });\n\n      const status = e?.response?.status;\n      const shouldRetry = !status || (status >= 500 && status < 600) || status === 429;\n\n      if (attempt < maxRetries && shouldRetry) {\n        const waitMs = 500 * Math.pow(2, attempt);\n        await sleep(waitMs);\n        continue;\n      }\n\n      return \"Maaf, terjadi kendala saat menerjemahkan. Coba lagi sebentar ya.\";\n    }\n  }\n\n  return \"Maaf, terjadi kendala saat menerjemahkan. Coba lagi sebentar ya.\";\n}\n"
+                },
+                "config.js": {
+                  "type": "file",
+                  "content": "export const cfg = {\n  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || \"\",\n  MONGODB_URI: process.env.MONGODB_URI || \"\",\n\n  COOKMYBOTS_AI_ENDPOINT:\n    process.env.COOKMYBOTS_AI_ENDPOINT || \"https://api.cookmybots.com/api/ai\",\n  COOKMYBOTS_AI_KEY: process.env.COOKMYBOTS_AI_KEY || \"\",\n\n  AI_TIMEOUT_MS: Number(process.env.AI_TIMEOUT_MS || 600000),\n  AI_MAX_RETRIES: Number(process.env.AI_MAX_RETRIES || 2),\n  CONCURRENCY: Number(process.env.CONCURRENCY || 20)\n};\n"
+                },
+                "db.js": {
+                  "type": "file",
+                  "content": "import { MongoClient } from \"mongodb\";\n\nimport { log, safeErr } from \"./logging.js\";\n\nlet client = null;\nlet db = null;\nlet connecting = null;\n\nexport async function getDb(mongoUri) {\n  if (!mongoUri) return null;\n  if (db) return db;\n  if (connecting) return connecting;\n\n  connecting = (async () => {\n    try {\n      client = new MongoClient(mongoUri, {\n        maxPoolSize: 10,\n        ignoreUndefined: true\n      });\n      await client.connect();\n      db = client.db();\n      log.info(\"mongo connected\", { ok: true });\n      return db;\n    } catch (e) {\n      log.error(\"mongo connect failed\", { err: safeErr(e) });\n      client = null;\n      db = null;\n      return null;\n    } finally {\n      connecting = null;\n    }\n  })();\n\n  return connecting;\n}\n\nexport async function withCollection(mongoUri, name, fn, opName = \"op\") {\n  const d = await getDb(mongoUri);\n  if (!d) return null;\n\n  try {\n    const col = d.collection(name);\n    return await fn(col);\n  } catch (e) {\n    log.error(\"mongo operation failed\", {\n      collection: name,\n      op: opName,\n      err: safeErr(e)\n    });\n    throw e;\n  }\n}\n"
+                },
+                "logging.js": {
+                  "type": "file",
+                  "content": "export function safeErr(err) {\n  return (\n    err?.response?.data?.error?.message ||\n    err?.response?.data?.message ||\n    err?.message ||\n    String(err)\n  );\n}\n\nfunction out(level, msg, meta) {\n  const line = {\n    level,\n    msg,\n    ...(meta && typeof meta === \"object\" ? meta : {})\n  };\n  console.log(JSON.stringify(line));\n}\n\nexport const log = {\n  info: (msg, meta) => out(\"info\", msg, meta),\n  warn: (msg, meta) => out(\"warn\", msg, meta),\n  error: (msg, meta) => out(\"error\", msg, meta)\n};\n"
+                },
+                "memory.js": {
+                  "type": "file",
+                  "content": "import { cfg } from \"./config.js\";\nimport { withCollection } from \"./db.js\";\nimport { log } from \"./logging.js\";\n\nconst COL = \"memory_messages\";\n\nconst mem = new Map();\nlet warnedNoMongo = false;\n\nfunction memKey({ platform, userId, chatId }) {\n  return `${platform}:${String(userId)}:${String(chatId)}`;\n}\n\nfunction warnNoMongoOnce() {\n  if (warnedNoMongo) return;\n  warnedNoMongo = true;\n  log.warn(\"MONGODB_URI missing - using in-memory memory (not persistent)\", {\n    persistence: false\n  });\n}\n\nexport async function addTurn({ platform, userId, chatId, role, text }) {\n  const doc = {\n    platform,\n    userId: String(userId),\n    chatId: String(chatId),\n    role,\n    text: String(text || \"\").slice(0, 8000),\n    ts: new Date()\n  };\n\n  if (!cfg.MONGODB_URI) {\n    warnNoMongoOnce();\n    const k = memKey(doc);\n    const arr = mem.get(k) || [];\n    arr.push({ role: doc.role, text: doc.text, ts: doc.ts });\n    if (arr.length > 60) arr.splice(0, arr.length - 60);\n    mem.set(k, arr);\n    return;\n  }\n\n  await withCollection(\n    cfg.MONGODB_URI,\n    COL,\n    (col) => col.insertOne(doc),\n    \"insertOne\"\n  );\n}\n\nexport async function getRecentTurns({ platform, userId, chatId, limit = 16 }) {\n  if (!cfg.MONGODB_URI) {\n    warnNoMongoOnce();\n    const k = memKey({ platform, userId, chatId });\n    const arr = mem.get(k) || [];\n    return arr.slice(-limit).map((x) => ({ role: x.role, text: x.text }));\n  }\n\n  const q = {\n    platform,\n    userId: String(userId),\n    chatId: String(chatId)\n  };\n\n  const rows = await withCollection(\n    cfg.MONGODB_URI,\n    COL,\n    (col) => col.find(q).sort({ ts: -1 }).limit(limit).toArray(),\n    \"findRecent\"\n  );\n\n  const list = Array.isArray(rows) ? rows : [];\n  return list.reverse().map((r) => ({ role: r.role, text: r.text }));\n}\n\nexport async function clearMemory({ platform, userId, chatId }) {\n  if (!cfg.MONGODB_URI) {\n    warnNoMongoOnce();\n    mem.delete(memKey({ platform, userId, chatId }));\n    return;\n  }\n\n  const q = {\n    platform,\n    userId: String(userId),\n    chatId: String(chatId)\n  };\n\n  await withCollection(\n    cfg.MONGODB_URI,\n    COL,\n    (col) => col.deleteMany(q),\n    \"deleteMany\"\n  );\n}\n"
+                }
+              }
+            }
+          }
+        }
+      },
+      "commands": [
+        {
+          "command": "/_internal_reset_inflight",
+          "description": "Handler for /_internal_reset_inflight",
+          "example": "User: /_internal_reset_inflight → bot replies."
+        },
+        {
+          "command": "/help",
+          "description": "Instruksi ringkas dan contoh input/output.",
+          "usage": "/help",
+          "examples": [
+            "User: /help → Bot: Kirim teks bahasa Inggris... Contoh..."
+          ],
+          "example": "User: /help → Bot: Kirim teks bahasa Inggris... Contoh...",
+          "notes": "Menjelaskan juga /reset."
+        },
+        {
+          "command": "/reset",
+          "description": "Menghapus memori percakapan user untuk chat ini.",
+          "usage": "/reset",
+          "examples": [
+            "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus."
+          ],
+          "example": "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus.",
+          "notes": "Jika MONGODB_URI tidak ada, reset hanya menghapus memori in-memory."
+        },
+        {
+          "command": "/start",
+          "description": "Perkenalan singkat, cara pakai (kirim teks Inggris, bot balas Indonesia), dan info /reset.",
+          "usage": "/start",
+          "examples": [
+            "User: /start → Bot: Halo. Aku bot penerjemah otomatis..."
+          ],
+          "example": "User: /start → Bot: Halo. Aku bot penerjemah otomatis...",
+          "notes": "Setelah /start, cukup kirim teks bahasa Inggris tanpa perintah."
+        }
+      ],
+      "envVarDocs": [
+        {
+          "key": "TELEGRAM_BOT_TOKEN",
+          "title": "Telegram Bot Token",
+          "description": "Token bot dari BotFather untuk mengakses Telegram Bot API.",
+          "usage": "Dipakai saat boot untuk membuat instance bot dan start long polling.",
+          "howToGet": "Buat bot lewat BotFather, lalu salin tokennya.",
+          "example": "123456789:ABCdefGhIJKlmnoPQRstuVWxyZ",
+          "isSecret": true,
+          "required": true
+        },
+        {
+          "key": "MONGODB_URI",
+          "title": "MongoDB Connection String",
+          "description": "Koneksi MongoDB untuk menyimpan long-term memory percakapan di koleksi memory_messages.",
+          "usage": "Jika diset, bot akan insertOne/find/deleteMany untuk memori. Jika kosong, bot pakai Map (non-persistent).",
+          "howToGet": "Buat database MongoDB (Atlas atau managed Mongo), lalu copy connection string database.",
+          "example": "mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/dbname?retryWrites=true&w=majority",
+          "isSecret": true,
+          "required": false
+        },
+        {
+          "key": "COOKMYBOTS_AI_ENDPOINT",
+          "title": "CookMyBots AI Endpoint",
+          "description": "Base URL AI gateway CookMyBots. Bot akan memanggil endpoint ini dengan /chat untuk terjemahan.",
+          "usage": "Digunakan oleh src/lib/ai.js untuk POST {endpoint}/chat.",
+          "howToGet": "Disediakan oleh CookMyBots. Jika tidak diset, default memakai https://api.cookmybots.com/api/ai.",
+          "example": "https://api.cookmybots.com/api/ai",
+          "isSecret": false,
+          "required": false
+        },
+        {
+          "key": "COOKMYBOTS_AI_KEY",
+          "title": "CookMyBots AI Key",
+          "description": "Key untuk autentikasi ke AI gateway CookMyBots.",
+          "usage": "Dikirim sebagai header Authorization: Bearer COOKMYBOTS_AI_KEY di setiap panggilan AI.",
+          "howToGet": "Disediakan oleh CookMyBots.",
+          "example": "cmb_ai_xxxxxxxxxxxxxxxxx",
+          "isSecret": true,
+          "required": false
+        },
+        {
+          "key": "AI_TIMEOUT_MS",
+          "title": "AI Timeout (ms)",
+          "description": "Timeout untuk request ke AI gateway.",
+          "usage": "axios timeout untuk src/lib/ai.js.",
+          "howToGet": "",
+          "example": "600000",
+          "isSecret": false,
+          "required": false
+        },
+        {
+          "key": "AI_MAX_RETRIES",
+          "title": "AI Max Retries",
+          "description": "Jumlah retry untuk error sementara (5xx/429/network).",
+          "usage": "Loop retry di src/lib/ai.js.",
+          "howToGet": "",
+          "example": "2",
+          "isSecret": false,
+          "required": false
+        },
+        {
+          "key": "CONCURRENCY",
+          "title": "Runner Concurrency",
+          "description": "Concurrency untuk @grammyjs/runner supaya update Telegram bisa diproses paralel tanpa blocking.",
+          "usage": "run(bot, { concurrency }).",
+          "howToGet": "",
+          "example": "20",
+          "isSecret": false,
+          "required": false
+        }
+      ],
+      "commandDocs": [
+        {
+          "command": "/start",
+          "description": "Perkenalan singkat, cara pakai (kirim teks Inggris, bot balas Indonesia), dan info /reset.",
+          "usage": "/start",
+          "examples": [
+            "User: /start → Bot: Halo. Aku bot penerjemah otomatis..."
+          ],
+          "notes": "Setelah /start, cukup kirim teks bahasa Inggris tanpa perintah."
+        },
+        {
+          "command": "/help",
+          "description": "Instruksi ringkas dan contoh input/output.",
+          "usage": "/help",
+          "examples": [
+            "User: /help → Bot: Kirim teks bahasa Inggris... Contoh..."
+          ],
+          "notes": "Menjelaskan juga /reset."
+        },
+        {
+          "command": "/reset",
+          "description": "Menghapus memori percakapan user untuk chat ini.",
+          "usage": "/reset",
+          "examples": [
+            "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus."
+          ],
+          "notes": "Jika MONGODB_URI tidak ada, reset hanya menghapus memori in-memory."
+        }
+      ],
+      "aiMessages": [
+        {
+          "role": "user",
+          "content": "buatkan saya bot penerjemahan otomatis bahasa inggris ke indonesia dan setup semua bot saya kecuali API telegram"
+        },
+        {
+          "role": "assistant",
+          "content": "Proyek bot Telegram baru sudah dibuat: grammY + @grammyjs/runner long polling, /start /help /reset, handler teks catch-all yang tidak menelan slash commands, balasan untuk pesan non-teks, AI terjemahan via CookMyBots gateway dengan logging, serta long-term memory di MongoDB (fallback Map jika MONGODB_URI kosong). Startup sudah termasuk deleteWebhook drop pending updates, process-level error handlers, bot.catch, dan retry backoff khusus untuk 409 Conflict.\n\nFiles touched (16): .env.sample, DOCS.md, README.md, package.json, project.json, src/bot.js…\nValidation: ✅ project passes syntax/basic checks after this edit."
+        }
+      ],
+      "createdBy": "",
+      "source": "",
+      "description": "",
+      "planMarkdown": "Bot: Bot Telegram Penerjemah Otomatis Inggris ke Indonesia (Production-Ready, Node.js ESM + grammY)\n\nSummary:\nBot ini menerjemahkan teks bahasa Inggris ke bahasa Indonesia secara otomatis di Telegram. Pengguna dapat mengirim pesan teks, meneruskan (forward) pesan, atau membalas (reply) pesan, lalu bot membalas dengan hasil terjemahan. Bot juga menyediakan mode auto-translate per chat, opsi gaya terjemahan (formal/santai), serta fitur dasar operasional seperti rate limiting, logging, dan pelacakan error.\n\nRencana ini mencakup arsitektur single-service Node.js berbasis grammY, pemilihan penyimpanan (MongoDB untuk konfigurasi dan audit), integrasi dengan layanan penerjemahan eksternal melalui HTTP, serta praktik produksi seperti webhook/long polling, manajemen environment variables, observability sederhana, dan strategi keamanan. Setup API Telegram (token, pengaturan bot di BotFather) diasumsikan sudah ada; sisanya dijelaskan end-to-end.\n\nProduct goals:\nTujuan utama\n1) Menerjemahkan teks bahasa Inggris ke bahasa Indonesia dengan cepat dan akurat untuk kebutuhan chat sehari-hari.\n2) Mendukung beberapa cara penggunaan: perintah manual, reply-to-translate, dan mode otomatis per chat.\n3) Memberikan pengalaman yang aman dan tahan gangguan (graceful degradation) saat layanan terjemahan bermasalah.\n\nTujuan produk tambahan\n1) Personalisasi sederhana: mode formal/santai, pilihan apakah mempertahankan format baris, dan preferensi untuk menampilkan teks asli.\n2) Admin controls: pembatasan penggunaan (allowlist/denylist), pemantauan jumlah request, dan kemampuan mematikan fitur tertentu jika terjadi penyalahgunaan.\n3) Kepatuhan operasional: menyimpan jejak minimal (audit ringan) untuk debugging dan metrik tanpa menyimpan konten sensitif berlebihan.\n\nBatasan yang jelas\n1) Fokus bahasa sumber Inggris dan target Indonesia; deteksi bahasa opsional hanya untuk menghindari menerjemahkan teks non-Inggris.\n2) Tidak menangani terjemahan dokumen besar, audio, atau OCR pada tahap awal. Jika nanti ditambah, dilakukan bertahap dengan pipeline terpisah dan pembatasan ukuran.\n\nHigh-level architecture:\nGambaran tinggi\n1) Satu layanan Node.js menjalankan bot grammY.\n2) Lapisan Bot Router: menangani perintah, message handlers, callback queries (jika ada), dan middleware (auth/rate limit).\n3) Lapisan Domain: modul translation service (adapter ke penyedia penerjemahan), modul preferences, modul admin policy.\n4) Lapisan Persistence: MongoDB untuk menyimpan konfigurasi pengguna/chat, pengaturan mode, dan event ringkas (telemetry/audit). In-memory maps dipakai untuk cache jangka pendek dan rate limiting.\n5) Lapisan Observability: structured logging, pelaporan error, dan metrik sederhana berbasis agregasi di MongoDB atau log.\n\nMode update Telegram\n1) Disarankan webhook untuk produksi agar latensi rendah dan efisien; fallback ke long polling untuk environment yang tidak mendukung webhook.\n2) Endpoint webhook harus memverifikasi bahwa request berasal dari Telegram melalui secret path atau header secret token (sesuai kemampuan platform) dan selalu membatasi ukuran payload.\n\nStruktur middleware\n1) Context enrichment: normalisasi userId/chatId, deteksi tipe chat (private/group/supergroup), dan pembacaan konfigurasi dari DB dengan cache.\n2) Rate limiting: per user dan per chat (lebih ketat untuk group), menggunakan in-memory token bucket dengan TTL; untuk multi-instance tidak relevan karena layanan tunggal.\n3) Access control: admin-only commands, allowlist untuk penggunaan di group (opsional), dan blocklist untuk user bermasalah.\n4) Safety checks: menolak input terlalu panjang, menghapus kontrol karakter, dan sanitasi minimal untuk menjaga format.\n\nTranslation adapter\n1) Modul penerjemahan melakukan HTTP request ke API penerjemahan eksternal.\n2) Mendukung retry terbatas dengan backoff untuk error sementara, serta circuit breaker ringan (misalnya menonaktifkan sementara jika banyak error berturut-turut).\n3) Normalisasi hasil: trimming, menjaga line breaks sesuai opsi pengguna, dan menyertakan indikator sumber/target bahasa.\n\nKetahanan dan performa\n1) Cache hasil terjemahan jangka pendek (misalnya 5–30 menit) berdasarkan hash input + opsi, untuk mengurangi biaya dan latensi.\n2) Batas panjang input default (misalnya 2.000–4.000 karakter), dengan pesan error yang jelas jika melebihi.\n3) Antrean internal sederhana berbasis in-memory untuk membatasi concurrency ke API penerjemahan, mencegah overload saat spam.\n\nData model:\nKoleksi MongoDB yang disarankan\n1) users\n   1) id: userId (number/string)\n   2) createdAt, lastSeenAt\n   3) preferences:\n      1) tone: formal | casual\n      2) showOriginal: boolean\n      3) preserveFormatting: boolean\n      4) autoTranslatePrivate: boolean\n   4) status:\n      1) isBlocked: boolean\n      2) isAdmin: boolean (opsional; atau pakai env ADMINUSERIDS)\n   5) stats (agregat ringan): totalRequests, lastRequestAt\n\n2) chats\n   1) id: chatId\n   2) type: private | group | supergroup\n   3) title (opsional untuk audit)\n   4) settings:\n      1) autoTranslate: boolean\n      2) requireEnglishOnly: boolean\n      3) allowInGroup: boolean\n      4) rateLimitProfile: default | strict\n   5) moderation:\n      1) blockedUserIds: array (opsional kecil)\n\n3) translationaudit (opsional, minim data)\n   Tujuan: debugging dan metrik, bukan menyimpan konten sensitif.\n   1) id\n   2) timestamp\n   3) userId, chatId\n   4) inputMeta: length, hash (bukan teks mentah)\n   5) options: tone, preserveFormatting\n   6) resultMeta: length, providerLatencyMs, status: ok|fail, errorCode\n\n4) adminconfig (opsional)\n   1) key-value sederhana untuk toggle global\n   2) maintenanceMode: boolean\n   3) defaultRateLimits\n\nData yang sengaja tidak disimpan\n1) Teks asli dan hasil terjemahan tidak perlu disimpan permanen kecuali pengguna mengaktifkan mode logging eksplisit untuk debugging.\n2) Identitas sensitif di luar Telegram (email/telepon) tidak dikumpulkan.\n\nCache in-memory\n1) translationCache: key = hash(text + options), value = translatedText, expiresAt.\n2) rateLimitBuckets: key = userId atau chatId, value = token bucket state.\n3) configCache: key = userId/chatId, value = preferences/settings dengan TTL pendek (misalnya 30–120 detik).\n\nKey flows:\nFlow 1: /start dan onboarding\n1) User mengirim /start.\n2) Bot menyimpan/menyegarkan profil user (createdAt/lastSeenAt).\n3) Bot mengirim ringkasan cara pakai: kirim teks Inggris, atau reply pesan untuk diterjemahkan, serta cara mengaktifkan mode otomatis.\n\nFlow 2: Terjemahan manual via perintah\n1) User mengirim /translate <teks>.\n2) Bot validasi panjang, rate limit, dan baca preferensi user.\n3) Bot panggil translation adapter.\n4) Bot membalas dengan hasil terjemahan, opsional menyertakan teks asli sesuai preferensi.\n\nFlow 3: Reply-to-translate (paling natural)\n1) User me-reply sebuah pesan berbahasa Inggris dengan /translate atau /tr.\n2) Bot mengambil teks dari pesan yang di-reply.\n3) Bot terjemahkan dan membalas di thread reply yang sama.\n4) Jika pesan yang di-reply bukan teks (stiker/foto), bot memberi instruksi bahwa hanya teks didukung saat ini.\n\nFlow 4: Mode auto-translate per chat\n1) Admin group atau user private mengaktifkan /auto on.\n2) Bot menyimpan chats.settings.autoTranslate = true.\n3) Setiap pesan teks baru di chat:\n   1) Bot cek apakah pesan adalah command; jika ya, lewati.\n   2) Bot cek heuristik bahasa (opsional): jika terlihat bukan Inggris dan requireEnglishOnly aktif, lewati.\n   3) Bot rate limit dan terjemahkan.\n   4) Bot membalas (atau mengirim pesan baru) dengan terjemahan.\n4) /auto off mematikan.\n\nFlow 5: Pengaturan gaya terjemahan\n1) User set /tone formal atau /tone casual.\n2) Bot simpan di users.preferences.tone.\n3) Opsi ini diteruskan ke translation adapter (misalnya sebagai instruksi gaya atau prompt jika provider mendukung).\n\nFlow 6: Error handling dan graceful degradation\n1) Jika provider timeout atau error:\n   1) Bot mengirim pesan singkat: layanan terjemahan sedang bermasalah, coba lagi.\n   2) Bot mencatat audit status fail + errorCode.\n2) Jika input terlalu panjang:\n   1) Bot meminta user memecah teks.\n3) Jika rate limit terlampaui:\n   1) Bot mengembalikan pesan tunggu beberapa detik.\n\nFlow 7: Admin dan operasional\n1) /stats (admin) menampilkan ringkasan request hari ini, error rate, dan top chats (tanpa konten).\n2) /maintenance on mematikan fitur terjemahan untuk semua kecuali admin.\n3) /block <userId> (opsional) menambahkan user ke blocklist.\n\nFlow 8: Privasi\n1) /privacy menampilkan kebijakan singkat: apa yang disimpan (metadata, bukan konten) dan opsi opt-out audit (jika disediakan).\n2) /deleteme menghapus data user dari koleksi users dan preferensi terkait (best-effort) serta menghentikan auto-translate private.\n\nTech stack:\nRuntime dan framework\n1) Node.js (ESM) sebagai single service.\n2) grammY sebagai framework bot Telegram.\n\nKonfigurasi dan secrets\n1) TELEGRAMBOTTOKEN wajib dari environment variables.\n2) MONGODBURI dari environment variables (jika memakai MongoDB).\n3) TRANSLATIONAPIKEY dan TRANSLATIONAPIBASEURL dari environment variables untuk provider penerjemahan eksternal.\n4) ADMINUSERIDS (daftar userId admin) dari environment variables.\n\nPersistensi\n1) MongoDB (sudah terintegrasi) untuk:\n   1) preferensi user\n   2) settings chat\n   3) audit dan metrik ringan (opsional)\n2) In-memory maps untuk:\n   1) cache terjemahan jangka pendek\n   2) rate limiting\n   3) cache konfigurasi TTL pendek\n\nIntegrasi terjemahan\n1) HTTP client untuk memanggil layanan penerjemahan eksternal.\n2) Strategi reliability: timeout ketat, retry terbatas, dan pembatas concurrency.\n\nPenyimpanan file (opsional)\n1) Jika suatu saat mendukung terjemahan dari file teks, simpan sementara di simple filesystem storage atau object storage, dengan TTL dan pembersihan terjadwal.\n\nDeployment\n1) Dijalankan pada Node.js server di cloud sebagai satu proses layanan.\n2) Mendukung webhook (disarankan) atau long polling.\n3) Logging keluar ke stdout/stderr untuk dikumpulkan oleh platform hosting.\n\nCatatan pembatasan\n1) Tidak menambahkan database atau infrastruktur lain di luar MongoDB atau in-memory.\n2) Tidak memakai message queue eksternal; kontrol beban dilakukan internal dalam proses.\n\nNon-functional requirements:\nKeamanan\n1) Validasi input: batasi panjang teks, tolak payload aneh, dan pastikan hanya memproses message types yang didukung.\n2) Proteksi webhook: gunakan secret path atau secret token, dan batasi request size.\n3) Minimal data: simpan metadata seperlunya, hindari menyimpan isi pesan kecuali benar-benar dibutuhkan.\n4) Admin-only operations: semua perintah admin harus diverifikasi dengan ADMINUSERIDS.\n\nKeandalan\n1) Timeout ketat ke provider terjemahan dan fallback pesan yang ramah.\n2) Retry hanya untuk error transient dan dibatasi agar tidak memperparah beban.\n3) Circuit breaker ringan: jika error beruntun, hentikan sementara pemanggilan provider dan informasikan user.\n\nSkalabilitas (dalam batas single service)\n1) Rate limiting per user/chat untuk menahan spam.\n2) Concurrency limiter untuk panggilan terjemahan.\n3) Cache hasil terjemahan TTL untuk mengurangi biaya.\n\nObservability\n1) Structured logging untuk event penting: command dipakai, request translate, error provider, rate limited.\n2) Audit tanpa konten: simpan hash dan panjang input saja.\n3) Admin /stats untuk melihat kondisi bot tanpa akses ke data sensitif.\n\nKualitas dan maintainability\n1) Pemisahan modul: handlers, services, repositories (Mongo), dan middleware.\n2) Konfigurasi berbasis environment variables, dengan validasi saat startup.\n3) Pengujian: minimal unit test untuk parser input, rate limit, dan adapter normalisasi hasil.\n\nKepatuhan operasional\n1) Retensi audit pendek (misalnya 7–30 hari) dengan job pembersihan periodik.\n2) Kemampuan hapus data user via /deleteme.\n3) Pesan /privacy menjelaskan dengan jelas apa yang disimpan dan tujuan penyimpanannya.\n\nBot commands:\n• /start — Memulai bot dan melihat cara penggunaan. (usage: /start) [general]\n• /help — Menampilkan bantuan singkat dan daftar fitur. (usage: /help) [general]\n• /translate — Menerjemahkan teks Inggris ke Indonesia secara manual, atau gunakan dengan reply ke pesan. (usage: 1) /translate This is a test\n2) Reply sebuah pesan lalu kirim /translate) [translation]\n• /tr — Alias singkat untuk /translate. (usage: 1) /tr Please translate this\n2) Reply pesan lalu /tr) [translation]\n• /auto — Mengaktifkan atau mematikan mode terjemahan otomatis untuk chat saat ini. (usage: 1) /auto on\n2) /auto off\n3) /auto status) [translation]\n• /tone — Mengatur gaya terjemahan (formal atau santai). (usage: 1) /tone formal\n2) /tone casual\n3) /tone status) [settings]\n• /original — Menampilkan atau menyembunyikan teks asli pada hasil terjemahan. (usage: 1) /original on\n2) /original off\n3) /original status) [settings]\n• /format — Mengatur apakah format baris (line breaks) dipertahankan. (usage: 1) /format preserve\n2) /format compact\n3) /format status) [settings]\n• /privacy — Menjelaskan kebijakan privasi dan data yang disimpan bot. (usage: /privacy) [general]\n• /deleteme — Menghapus data preferensi pengguna dari database (best-effort). (usage: /deleteme) [general]\n• /stats — Ringkasan metrik penggunaan dan error (khusus admin). (usage: /stats) [admin]\n• /maintenance — Mengaktifkan/mematikan mode perawatan global (khusus admin). (usage: 1) /maintenance on\n2) /maintenance off\n3) /maintenance status) [admin]\n• /block — Memblokir user tertentu dari menggunakan bot (khusus admin, opsional). (usage: /block <userId>) [admin]\n• /unblock — Membuka blokir user tertentu (khusus admin, opsional). (usage: /unblock <userId>) [admin]\n",
+      "planSections": {
+        "productGoals": "Tujuan utama\n1) Menerjemahkan teks bahasa Inggris ke bahasa Indonesia dengan cepat dan akurat untuk kebutuhan chat sehari-hari.\n2) Mendukung beberapa cara penggunaan: perintah manual, reply-to-translate, dan mode otomatis per chat.\n3) Memberikan pengalaman yang aman dan tahan gangguan (graceful degradation) saat layanan terjemahan bermasalah.\n\nTujuan produk tambahan\n1) Personalisasi sederhana: mode formal/santai, pilihan apakah mempertahankan format baris, dan preferensi untuk menampilkan teks asli.\n2) Admin controls: pembatasan penggunaan (allowlist/denylist), pemantauan jumlah request, dan kemampuan mematikan fitur tertentu jika terjadi penyalahgunaan.\n3) Kepatuhan operasional: menyimpan jejak minimal (audit ringan) untuk debugging dan metrik tanpa menyimpan konten sensitif berlebihan.\n\nBatasan yang jelas\n1) Fokus bahasa sumber Inggris dan target Indonesia; deteksi bahasa opsional hanya untuk menghindari menerjemahkan teks non-Inggris.\n2) Tidak menangani terjemahan dokumen besar, audio, atau OCR pada tahap awal. Jika nanti ditambah, dilakukan bertahap dengan pipeline terpisah dan pembatasan ukuran.",
+        "highLevelArchitecture": "Gambaran tinggi\n1) Satu layanan Node.js menjalankan bot grammY.\n2) Lapisan Bot Router: menangani perintah, message handlers, callback queries (jika ada), dan middleware (auth/rate limit).\n3) Lapisan Domain: modul translation service (adapter ke penyedia penerjemahan), modul preferences, modul admin policy.\n4) Lapisan Persistence: MongoDB untuk menyimpan konfigurasi pengguna/chat, pengaturan mode, dan event ringkas (telemetry/audit). In-memory maps dipakai untuk cache jangka pendek dan rate limiting.\n5) Lapisan Observability: structured logging, pelaporan error, dan metrik sederhana berbasis agregasi di MongoDB atau log.\n\nMode update Telegram\n1) Disarankan webhook untuk produksi agar latensi rendah dan efisien; fallback ke long polling untuk environment yang tidak mendukung webhook.\n2) Endpoint webhook harus memverifikasi bahwa request berasal dari Telegram melalui secret path atau header secret token (sesuai kemampuan platform) dan selalu membatasi ukuran payload.\n\nStruktur middleware\n1) Context enrichment: normalisasi userId/chatId, deteksi tipe chat (private/group/supergroup), dan pembacaan konfigurasi dari DB dengan cache.\n2) Rate limiting: per user dan per chat (lebih ketat untuk group), menggunakan in-memory token bucket dengan TTL; untuk multi-instance tidak relevan karena layanan tunggal.\n3) Access control: admin-only commands, allowlist untuk penggunaan di group (opsional), dan blocklist untuk user bermasalah.\n4) Safety checks: menolak input terlalu panjang, menghapus kontrol karakter, dan sanitasi minimal untuk menjaga format.\n\nTranslation adapter\n1) Modul penerjemahan melakukan HTTP request ke API penerjemahan eksternal.\n2) Mendukung retry terbatas dengan backoff untuk error sementara, serta circuit breaker ringan (misalnya menonaktifkan sementara jika banyak error berturut-turut).\n3) Normalisasi hasil: trimming, menjaga line breaks sesuai opsi pengguna, dan menyertakan indikator sumber/target bahasa.\n\nKetahanan dan performa\n1) Cache hasil terjemahan jangka pendek (misalnya 5–30 menit) berdasarkan hash input + opsi, untuk mengurangi biaya dan latensi.\n2) Batas panjang input default (misalnya 2.000–4.000 karakter), dengan pesan error yang jelas jika melebihi.\n3) Antrean internal sederhana berbasis in-memory untuk membatasi concurrency ke API penerjemahan, mencegah overload saat spam.",
+        "dataModel": "Koleksi MongoDB yang disarankan\n1) users\n   1) id: userId (number/string)\n   2) createdAt, lastSeenAt\n   3) preferences:\n      1) tone: formal | casual\n      2) showOriginal: boolean\n      3) preserveFormatting: boolean\n      4) autoTranslatePrivate: boolean\n   4) status:\n      1) isBlocked: boolean\n      2) isAdmin: boolean (opsional; atau pakai env ADMINUSERIDS)\n   5) stats (agregat ringan): totalRequests, lastRequestAt\n\n2) chats\n   1) id: chatId\n   2) type: private | group | supergroup\n   3) title (opsional untuk audit)\n   4) settings:\n      1) autoTranslate: boolean\n      2) requireEnglishOnly: boolean\n      3) allowInGroup: boolean\n      4) rateLimitProfile: default | strict\n   5) moderation:\n      1) blockedUserIds: array (opsional kecil)\n\n3) translationaudit (opsional, minim data)\n   Tujuan: debugging dan metrik, bukan menyimpan konten sensitif.\n   1) id\n   2) timestamp\n   3) userId, chatId\n   4) inputMeta: length, hash (bukan teks mentah)\n   5) options: tone, preserveFormatting\n   6) resultMeta: length, providerLatencyMs, status: ok|fail, errorCode\n\n4) adminconfig (opsional)\n   1) key-value sederhana untuk toggle global\n   2) maintenanceMode: boolean\n   3) defaultRateLimits\n\nData yang sengaja tidak disimpan\n1) Teks asli dan hasil terjemahan tidak perlu disimpan permanen kecuali pengguna mengaktifkan mode logging eksplisit untuk debugging.\n2) Identitas sensitif di luar Telegram (email/telepon) tidak dikumpulkan.\n\nCache in-memory\n1) translationCache: key = hash(text + options), value = translatedText, expiresAt.\n2) rateLimitBuckets: key = userId atau chatId, value = token bucket state.\n3) configCache: key = userId/chatId, value = preferences/settings dengan TTL pendek (misalnya 30–120 detik).",
+        "keyFlows": "Flow 1: /start dan onboarding\n1) User mengirim /start.\n2) Bot menyimpan/menyegarkan profil user (createdAt/lastSeenAt).\n3) Bot mengirim ringkasan cara pakai: kirim teks Inggris, atau reply pesan untuk diterjemahkan, serta cara mengaktifkan mode otomatis.\n\nFlow 2: Terjemahan manual via perintah\n1) User mengirim /translate <teks>.\n2) Bot validasi panjang, rate limit, dan baca preferensi user.\n3) Bot panggil translation adapter.\n4) Bot membalas dengan hasil terjemahan, opsional menyertakan teks asli sesuai preferensi.\n\nFlow 3: Reply-to-translate (paling natural)\n1) User me-reply sebuah pesan berbahasa Inggris dengan /translate atau /tr.\n2) Bot mengambil teks dari pesan yang di-reply.\n3) Bot terjemahkan dan membalas di thread reply yang sama.\n4) Jika pesan yang di-reply bukan teks (stiker/foto), bot memberi instruksi bahwa hanya teks didukung saat ini.\n\nFlow 4: Mode auto-translate per chat\n1) Admin group atau user private mengaktifkan /auto on.\n2) Bot menyimpan chats.settings.autoTranslate = true.\n3) Setiap pesan teks baru di chat:\n   1) Bot cek apakah pesan adalah command; jika ya, lewati.\n   2) Bot cek heuristik bahasa (opsional): jika terlihat bukan Inggris dan requireEnglishOnly aktif, lewati.\n   3) Bot rate limit dan terjemahkan.\n   4) Bot membalas (atau mengirim pesan baru) dengan terjemahan.\n4) /auto off mematikan.\n\nFlow 5: Pengaturan gaya terjemahan\n1) User set /tone formal atau /tone casual.\n2) Bot simpan di users.preferences.tone.\n3) Opsi ini diteruskan ke translation adapter (misalnya sebagai instruksi gaya atau prompt jika provider mendukung).\n\nFlow 6: Error handling dan graceful degradation\n1) Jika provider timeout atau error:\n   1) Bot mengirim pesan singkat: layanan terjemahan sedang bermasalah, coba lagi.\n   2) Bot mencatat audit status fail + errorCode.\n2) Jika input terlalu panjang:\n   1) Bot meminta user memecah teks.\n3) Jika rate limit terlampaui:\n   1) Bot mengembalikan pesan tunggu beberapa detik.\n\nFlow 7: Admin dan operasional\n1) /stats (admin) menampilkan ringkasan request hari ini, error rate, dan top chats (tanpa konten).\n2) /maintenance on mematikan fitur terjemahan untuk semua kecuali admin.\n3) /block <userId> (opsional) menambahkan user ke blocklist.\n\nFlow 8: Privasi\n1) /privacy menampilkan kebijakan singkat: apa yang disimpan (metadata, bukan konten) dan opsi opt-out audit (jika disediakan).\n2) /deleteme menghapus data user dari koleksi users dan preferensi terkait (best-effort) serta menghentikan auto-translate private.",
+        "techStack": "Runtime dan framework\n1) Node.js (ESM) sebagai single service.\n2) grammY sebagai framework bot Telegram.\n\nKonfigurasi dan secrets\n1) TELEGRAMBOTTOKEN wajib dari environment variables.\n2) MONGODBURI dari environment variables (jika memakai MongoDB).\n3) TRANSLATIONAPIKEY dan TRANSLATIONAPIBASEURL dari environment variables untuk provider penerjemahan eksternal.\n4) ADMINUSERIDS (daftar userId admin) dari environment variables.\n\nPersistensi\n1) MongoDB (sudah terintegrasi) untuk:\n   1) preferensi user\n   2) settings chat\n   3) audit dan metrik ringan (opsional)\n2) In-memory maps untuk:\n   1) cache terjemahan jangka pendek\n   2) rate limiting\n   3) cache konfigurasi TTL pendek\n\nIntegrasi terjemahan\n1) HTTP client untuk memanggil layanan penerjemahan eksternal.\n2) Strategi reliability: timeout ketat, retry terbatas, dan pembatas concurrency.\n\nPenyimpanan file (opsional)\n1) Jika suatu saat mendukung terjemahan dari file teks, simpan sementara di simple filesystem storage atau object storage, dengan TTL dan pembersihan terjadwal.\n\nDeployment\n1) Dijalankan pada Node.js server di cloud sebagai satu proses layanan.\n2) Mendukung webhook (disarankan) atau long polling.\n3) Logging keluar ke stdout/stderr untuk dikumpulkan oleh platform hosting.\n\nCatatan pembatasan\n1) Tidak menambahkan database atau infrastruktur lain di luar MongoDB atau in-memory.\n2) Tidak memakai message queue eksternal; kontrol beban dilakukan internal dalam proses.",
+        "nonFunctional": "Keamanan\n1) Validasi input: batasi panjang teks, tolak payload aneh, dan pastikan hanya memproses message types yang didukung.\n2) Proteksi webhook: gunakan secret path atau secret token, dan batasi request size.\n3) Minimal data: simpan metadata seperlunya, hindari menyimpan isi pesan kecuali benar-benar dibutuhkan.\n4) Admin-only operations: semua perintah admin harus diverifikasi dengan ADMINUSERIDS.\n\nKeandalan\n1) Timeout ketat ke provider terjemahan dan fallback pesan yang ramah.\n2) Retry hanya untuk error transient dan dibatasi agar tidak memperparah beban.\n3) Circuit breaker ringan: jika error beruntun, hentikan sementara pemanggilan provider dan informasikan user.\n\nSkalabilitas (dalam batas single service)\n1) Rate limiting per user/chat untuk menahan spam.\n2) Concurrency limiter untuk panggilan terjemahan.\n3) Cache hasil terjemahan TTL untuk mengurangi biaya.\n\nObservability\n1) Structured logging untuk event penting: command dipakai, request translate, error provider, rate limited.\n2) Audit tanpa konten: simpan hash dan panjang input saja.\n3) Admin /stats untuk melihat kondisi bot tanpa akses ke data sensitif.\n\nKualitas dan maintainability\n1) Pemisahan modul: handlers, services, repositories (Mongo), dan middleware.\n2) Konfigurasi berbasis environment variables, dengan validasi saat startup.\n3) Pengujian: minimal unit test untuk parser input, rate limit, dan adapter normalisasi hasil.\n\nKepatuhan operasional\n1) Retensi audit pendek (misalnya 7–30 hari) dengan job pembersihan periodik.\n2) Kemampuan hapus data user via /deleteme.\n3) Pesan /privacy menjelaskan dengan jelas apa yang disimpan dan tujuan penyimpanannya."
+      },
+      "balanceCentsRemaining": 123,
+      "billing": {
+        "ok": true,
+        "charged": 25,
+        "remaining": 123,
+        "chargedCents": 25,
+        "remainingCents": 123,
+        "currency": "USD",
+        "baseUsd": 0.12656599999999998,
+        "markupUsd": 0.12656599999999998,
+        "platformFeeUsd": 0,
+        "totalUsd": 0.25313199999999997
+      },
+      "title": "Bot Telegram Penerjemah Otom"
+    }
+  },
+  "envVarDocs": [
+    {
+      "key": "TELEGRAM_BOT_TOKEN",
+      "title": "Telegram Bot Token",
+      "description": "Token bot dari BotFather untuk mengakses Telegram Bot API.",
+      "usage": "Dipakai saat boot untuk membuat instance bot dan start long polling.",
+      "howToGet": "Buat bot lewat BotFather, lalu salin tokennya.",
+      "example": "123456789:ABCdefGhIJKlmnoPQRstuVWxyZ",
+      "isSecret": true,
+      "required": true
+    },
+    {
+      "key": "MONGODB_URI",
+      "title": "MongoDB Connection String",
+      "description": "Koneksi MongoDB untuk menyimpan long-term memory percakapan di koleksi memory_messages.",
+      "usage": "Jika diset, bot akan insertOne/find/deleteMany untuk memori. Jika kosong, bot pakai Map (non-persistent).",
+      "howToGet": "Buat database MongoDB (Atlas atau managed Mongo), lalu copy connection string database.",
+      "example": "mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/dbname?retryWrites=true&w=majority",
+      "isSecret": true,
+      "required": false
+    },
+    {
+      "key": "COOKMYBOTS_AI_ENDPOINT",
+      "title": "CookMyBots AI Endpoint",
+      "description": "Base URL AI gateway CookMyBots. Bot akan memanggil endpoint ini dengan /chat untuk terjemahan.",
+      "usage": "Digunakan oleh src/lib/ai.js untuk POST {endpoint}/chat.",
+      "howToGet": "Disediakan oleh CookMyBots. Jika tidak diset, default memakai https://api.cookmybots.com/api/ai.",
+      "example": "https://api.cookmybots.com/api/ai",
+      "isSecret": false,
+      "required": false
+    },
+    {
+      "key": "COOKMYBOTS_AI_KEY",
+      "title": "CookMyBots AI Key",
+      "description": "Key untuk autentikasi ke AI gateway CookMyBots.",
+      "usage": "Dikirim sebagai header Authorization: Bearer COOKMYBOTS_AI_KEY di setiap panggilan AI.",
+      "howToGet": "Disediakan oleh CookMyBots.",
+      "example": "cmb_ai_xxxxxxxxxxxxxxxxx",
+      "isSecret": true,
+      "required": false
+    },
+    {
+      "key": "AI_TIMEOUT_MS",
+      "title": "AI Timeout (ms)",
+      "description": "Timeout untuk request ke AI gateway.",
+      "usage": "axios timeout untuk src/lib/ai.js.",
+      "howToGet": "",
+      "example": "600000",
+      "isSecret": false,
+      "required": false
+    },
+    {
+      "key": "AI_MAX_RETRIES",
+      "title": "AI Max Retries",
+      "description": "Jumlah retry untuk error sementara (5xx/429/network).",
+      "usage": "Loop retry di src/lib/ai.js.",
+      "howToGet": "",
+      "example": "2",
+      "isSecret": false,
+      "required": false
+    },
+    {
+      "key": "CONCURRENCY",
+      "title": "Runner Concurrency",
+      "description": "Concurrency untuk @grammyjs/runner supaya update Telegram bisa diproses paralel tanpa blocking.",
+      "usage": "run(bot, { concurrency }).",
+      "howToGet": "",
+      "example": "20",
+      "isSecret": false,
+      "required": false
+    }
+  ],
+  "commandDocs": [
+    {
+      "command": "/start",
+      "description": "Perkenalan singkat, cara pakai (kirim teks Inggris, bot balas Indonesia), dan info /reset.",
+      "usage": "/start",
+      "examples": [
+        "User: /start → Bot: Halo. Aku bot penerjemah otomatis..."
+      ],
+      "notes": "Setelah /start, cukup kirim teks bahasa Inggris tanpa perintah."
+    },
+    {
+      "command": "/help",
+      "description": "Instruksi ringkas dan contoh input/output.",
+      "usage": "/help",
+      "examples": [
+        "User: /help → Bot: Kirim teks bahasa Inggris... Contoh..."
+      ],
+      "notes": "Menjelaskan juga /reset."
+    },
+    {
+      "command": "/reset",
+      "description": "Menghapus memori percakapan user untuk chat ini.",
+      "usage": "/reset",
+      "examples": [
+        "User: /reset → Bot: Riwayat percakapan kamu untuk chat ini sudah dihapus."
+      ],
+      "notes": "Jika MONGODB_URI tidak ada, reset hanya menghapus memori in-memory."
+    }
+  ],
+  "title": "Bot Telegram Penerjemah Otom"
+}
